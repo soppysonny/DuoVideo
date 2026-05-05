@@ -1,5 +1,6 @@
 import UIKit
 import AVFoundation
+import CoreImage
 import Photos
 
 // MARK: - ViewController
@@ -19,6 +20,7 @@ class ViewController: UIViewController {
     private var recordingSeconds = 0
     private var audioLevelValue: Float = 0
     private var pipIsDragging   = false
+    private var pipFreeOrigin: CGPoint? = nil  // 用户拖动后的自由坐标，nil 时使用默认角落
 
     enum PiPCorner { case topLeft, topRight, bottomLeft, bottomRight }
 
@@ -47,6 +49,7 @@ class ViewController: UIViewController {
     private let pipLabelView      = UIView()
     private let pipBottomView     = UIView()
     private let pipRecBorderLayer = CALayer()
+    private let watermarkView     = PiPWatermarkView()
 
     // MARK: - Top HUD
 
@@ -73,7 +76,8 @@ class ViewController: UIViewController {
     private let micBtn    = ToolbarButton(icon: "mic.fill",         iconOff: "mic.slash.fill",  title: "MIC")
     private let mirrorBtn = ToolbarButton(icon: "camera.filters",   iconOff: nil,               title: "MIRROR")
     private let gridBtn   = ToolbarButton(icon: "grid",             iconOff: nil,               title: "GRID")
-    private let aeLockBtn = ToolbarButton(icon: "lock.fill",        iconOff: "lock.open.fill",  title: "AE/AF")
+    private let aeLockBtn    = ToolbarButton(icon: "lock.fill",        iconOff: "lock.open.fill",  title: "AE/AF")
+    private let settingsBtn  = ToolbarButton(icon: "gearshape.fill",   iconOff: nil,               title: "SET")
 
     // MARK: - Bottom dock
 
@@ -108,6 +112,10 @@ class ViewController: UIViewController {
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         NotificationCenter.default.addObserver(self, selector: #selector(deviceOrientationChanged),
                                                name: UIDevice.orientationDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(captureModeChanged),
+                                               name: .captureModeChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(recordingsChanged),
+                                               name: .recordingsChanged, object: nil)
         setupUI()
         checkSupportAndRequestPermissions()
     }
@@ -121,6 +129,7 @@ class ViewController: UIViewController {
         super.viewWillAppear(animated)
         cameraManager?.startRunning()
         syncOrientationIfNeeded()
+        refreshGalleryBadge()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -279,6 +288,11 @@ class ViewController: UIViewController {
         pipRecBorderLayer.opacity     = 0
         pipContainerView.layer.addSublayer(pipRecBorderLayer)
 
+        // Watermark overlay (hidden for pro users)
+        watermarkView.isHidden = AppSettings.shared.isProUser
+        watermarkView.isUserInteractionEnabled = false
+        pipContainerView.addSubview(watermarkView)
+
         // Drag gesture (only when not recording)
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePiPDrag(_:)))
         pipContainerView.addGestureRecognizer(pan)
@@ -391,11 +405,12 @@ class ViewController: UIViewController {
         view.addSubview(sideToolbarBlur)
 
         for (btn, sel) in [
-            (flashBtn,   #selector(handleFlash)),
-            (micBtn,     #selector(handleMic)),
-            (mirrorBtn,  #selector(handleMirror)),
-            (gridBtn,    #selector(handleGrid)),
-            (aeLockBtn,  #selector(handleAELock)),
+            (flashBtn,    #selector(handleFlash)),
+            (micBtn,      #selector(handleMic)),
+            (mirrorBtn,   #selector(handleMirror)),
+            (gridBtn,     #selector(handleGrid)),
+            (aeLockBtn,   #selector(handleAELock)),
+            (settingsBtn, #selector(handleSettings)),
         ] as [(ToolbarButton, Selector)] {
             btn.addTarget(self, action: sel, for: .touchUpInside)
             sideToolbarBlur.contentView.addSubview(btn)
@@ -421,7 +436,8 @@ class ViewController: UIViewController {
         bottomDockView.addSubview(galleryThumb)
 
         // "3" badge
-        galleryCountLbl.text = "3"
+        galleryCountLbl.text = "0"
+        galleryCountLbl.isHidden = true
         galleryCountLbl.font = UIFont.monospacedSystemFont(ofSize: 8, weight: .semibold)
         galleryCountLbl.textColor = .white
         galleryCountLbl.backgroundColor = UIColor(red: 1, green: 0.231, blue: 0.188, alpha: 1)
@@ -517,6 +533,7 @@ class ViewController: UIViewController {
         layoutPiP(size: size, isLandscape: isLandscape, safe: safe, shorter: shorter)
         layoutAudioMeter(size: size, isLandscape: isLandscape, safe: safe)
         layoutCrosshair(size: size)
+        applyOverlapFade(animated: false)
     }
 
     private func layoutTopHUD(size: CGSize, isLandscape: Bool, safe: UIEdgeInsets) {
@@ -589,8 +606,8 @@ class ViewController: UIViewController {
         let btnH: CGFloat  = ToolbarButton.totalHeight  // icon(40) + gap(3) + label(10) = 53
         let gap: CGFloat   = 5
         let padding: CGFloat = 6
-        let count          = CGFloat(5)
-        let buttons        = [flashBtn, micBtn, mirrorBtn, gridBtn, aeLockBtn] as [UIView]
+        let count          = CGFloat(6)
+        let buttons        = [flashBtn, micBtn, mirrorBtn, gridBtn, aeLockBtn, settingsBtn] as [UIView]
 
         if isLandscape {
             let dockW: CGFloat    = 110
@@ -684,10 +701,25 @@ class ViewController: UIViewController {
 
         let margins = isLandscape
             ? PiPMargins(top: safe.top + 14, bottom: safe.bottom + 80, left: safe.left + 60, right: safe.right + 130)
-            : PiPMargins(top: safe.top + 56, bottom: safe.bottom + 150, left: 12, right: 12)
+            : PiPMargins(top: safe.top + 8, bottom: safe.bottom + 150, left: 8, right: 8)
 
-        snapPiP(to: pipCorner, size: size, pipSize: CGSize(width: pipW, height: pipH),
-                margins: margins, animated: false)
+        if let freeOrigin = pipFreeOrigin {
+            // 保持用户拖动后的自由坐标，旋转时做边界裁剪避免越界
+            let clamped = CGPoint(
+                x: min(max(freeOrigin.x, 0), size.width  - pipW),
+                y: min(max(freeOrigin.y, 0), size.height - pipH)
+            )
+            pipContainerView.frame.origin = clamped
+            pipFreeOrigin = clamped
+            let normX = Float(clamped.x / size.width)
+            let normY = Float(clamped.y / size.height)
+            videoRecorder.updatePiPOrigin(normalizedX: normX, normalizedY: normY)
+        } else {
+            snapPiP(to: pipCorner, size: size, pipSize: CGSize(width: pipW, height: pipH),
+                    margins: margins, animated: false)
+        }
+
+        updateWatermarkPosition()
 
         // Update PiP internal overlay frames
         pipLabelView.frame = CGRect(x: 0, y: 0, width: pipW, height: 28)
@@ -765,17 +797,61 @@ class ViewController: UIViewController {
         let safe = view.safeAreaInsets
         let m = margins ?? (isL
             ? PiPMargins(top: safe.top + 14, bottom: safe.bottom + 80, left: safe.left + 60, right: safe.right + 130)
-            : PiPMargins(top: safe.top + 56, bottom: safe.bottom + 150, left: 12, right: 12))
+            : PiPMargins(top: safe.top + 8, bottom: safe.bottom + 150, left: 8, right: 8))
 
         let origin = pipPosition(for: corner, size: s, pipSize: ps, margins: m)
+
+        // 同步合成视频里的 PiP 叠层位置（归一化坐标）
+        let normX = Float(origin.x / s.width)
+        let normY = Float(origin.y / s.height)
+        videoRecorder.updatePiPOrigin(normalizedX: normX, normalizedY: normY)
 
         if animated {
             UIView.animate(withDuration: 0.22, delay: 0,
                            usingSpringWithDamping: 0.75, initialSpringVelocity: 0.3) {
                 self.pipContainerView.frame.origin = origin
+                self.updateWatermarkPosition()
+            } completion: { _ in
+                self.applyOverlapFade()
             }
         } else {
             pipContainerView.frame.origin = origin
+            updateWatermarkPosition()
+        }
+    }
+
+    // PiP 停止后检测重叠 view 并设为半透明
+    private func applyOverlapFade(animated: Bool = true) {
+        let pipFrame = pipContainerView.frame
+        let overlapsTop     = pipFrame.intersects(topHUDView.frame)
+        let overlapsMeter   = !meterPillView.isHidden && pipFrame.intersects(meterPillView.frame)
+        let overlapsToolbar = pipFrame.intersects(sideToolbarBlur.frame)
+
+        let block = {
+            self.topHUDView.alpha      = overlapsTop     ? 0.25 : 1.0
+            self.meterPillView.alpha   = overlapsMeter   ? 0.25 : 1.0
+            self.sideToolbarBlur.alpha = overlapsToolbar ? 0.25 : 1.0
+        }
+        if animated {
+            UIView.animate(withDuration: 0.2, animations: block)
+        } else {
+            block()
+        }
+    }
+
+    private func updateWatermarkPosition() {
+        let pw = pipContainerView.bounds.width
+        let ph = pipContainerView.bounds.height
+        guard pw > 0, ph > 0 else { return }
+        watermarkView.isHidden = AppSettings.shared.isProUser
+        guard !watermarkView.isHidden else { return }
+        let sz  = watermarkView.preferredSize
+        let pad: CGFloat = 6
+        switch pipCorner {
+        case .bottomRight: watermarkView.frame = CGRect(x: pad,              y: pad,              width: sz.width, height: sz.height)
+        case .bottomLeft:  watermarkView.frame = CGRect(x: pw - sz.width - pad, y: pad,              width: sz.width, height: sz.height)
+        case .topRight:    watermarkView.frame = CGRect(x: pad,              y: ph - sz.height - pad, width: sz.width, height: sz.height)
+        case .topLeft:     watermarkView.frame = CGRect(x: pw - sz.width - pad, y: ph - sz.height - pad, width: sz.width, height: sz.height)
         }
     }
 
@@ -802,17 +878,23 @@ class ViewController: UIViewController {
                 self.pipContainerView.transform = .identity
                 self.pipContainerView.layer.borderColor = UIColor.white.withAlphaComponent(0.25).cgColor
             }
+            // 更新象限用于水印位置和合成视频同步，但不做吸附
             let center = pipContainerView.center
             let isLeft = center.x < view.bounds.midX
             let isTop  = center.y < view.bounds.midY
-            let corner: PiPCorner
             switch (isTop, isLeft) {
-            case (true,  true):  corner = .topLeft
-            case (true,  false): corner = .topRight
-            case (false, true):  corner = .bottomLeft
-            case (false, false): corner = .bottomRight
+            case (true,  true):  pipCorner = .topLeft
+            case (true,  false): pipCorner = .topRight
+            case (false, true):  pipCorner = .bottomLeft
+            case (false, false): pipCorner = .bottomRight
             }
-            snapPiP(to: corner)
+            pipFreeOrigin = pipContainerView.frame.origin
+            updateWatermarkPosition()
+            let origin = pipContainerView.frame.origin
+            let normX = Float(origin.x / view.bounds.width)
+            let normY = Float(origin.y / view.bounds.height)
+            videoRecorder.updatePiPOrigin(normalizedX: normX, normalizedY: normY)
+            applyOverlapFade()
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         default: break
         }
@@ -854,6 +936,10 @@ class ViewController: UIViewController {
 
     @objc private func recordButtonTapped() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        if AppSettings.shared.captureMode == .photo {
+            takePhoto()
+            return
+        }
         if videoRecorder.state == .recording {
             stopRecording()
         } else if videoRecorder.state == .idle {
@@ -865,7 +951,10 @@ class ViewController: UIViewController {
         let orientation = AVCaptureVideoOrientation(device: UIDevice.current.orientation) ?? .portrait
         lockedOrientation = orientation
         cameraManager?.setVideoOrientation(orientation)
-        videoRecorder.isMicMuted = isMicMuted
+        videoRecorder.isMicMuted    = isMicMuted
+        videoRecorder.saveComposite = AppSettings.shared.saveComposite
+        videoRecorder.saveBack      = AppSettings.shared.saveBack
+        videoRecorder.saveFront     = AppSettings.shared.saveFront
 
         do {
             try videoRecorder.startRecording()
@@ -908,16 +997,19 @@ class ViewController: UIViewController {
     }
 
     private func saveSession(_ session: RecordingSession) {
+        // 文件保留在沙盒供应用内画廊使用，同时异步导出到系统相册
         photoExporter.exportSession(session) { [weak self] result in
-            switch result {
-            case .success:
-                try? FileManager.default.removeItem(at: session.compositeVideoURL)
-                try? FileManager.default.removeItem(at: session.backVideoURL)
-                try? FileManager.default.removeItem(at: session.frontVideoURL)
-            case .failure(let err):
-                self?.showAlert(title: "保存失败", message: err.localizedDescription)
+            if case .failure(let err) = result {
+                self?.showAlert(title: "导出相册失败", message: err.localizedDescription)
             }
         }
+        refreshGalleryBadge()
+    }
+
+    private func refreshGalleryBadge() {
+        let count = RecordingsListViewController.sessionCount()
+        galleryCountLbl.isHidden = count == 0
+        galleryCountLbl.text     = "\(min(count, 99))"
     }
 
     // MARK: - Timer / DisplayLink
@@ -1003,8 +1095,21 @@ class ViewController: UIViewController {
     private func setRecordingUI(_ rec: Bool) {
         islandPillView.isHidden = !rec
         if rec { animateIslandIn() }
-        // Flash while recording for island dot
         if rec { startIslandDotBlink() } else { islandDot.layer.removeAllAnimations() }
+
+        UIView.animate(withDuration: 0.22, animations: {
+            let alpha: CGFloat = rec ? 0 : 1
+            self.sideToolbarBlur.alpha = alpha
+            self.galleryThumb.alpha    = alpha
+            self.swapBtn.alpha         = alpha
+            if let lbl = self.bottomDockView.viewWithTag(701) { lbl.alpha = alpha }
+            if let lbl = self.bottomDockView.viewWithTag(702) { lbl.alpha = alpha }
+        }, completion: { _ in
+            if !rec { self.applyOverlapFade() }
+        })
+        sideToolbarBlur.isUserInteractionEnabled = !rec
+        galleryThumb.isUserInteractionEnabled    = !rec
+        swapBtn.isUserInteractionEnabled         = !rec
     }
 
     private func animateIslandIn() {
@@ -1099,11 +1204,107 @@ class ViewController: UIViewController {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
+    @objc private func handleSettings() {
+        cameraManager?.stopRunning()
+        let vc = SettingsViewController()
+        present(vc, animated: true)
+    }
+
+    @objc private func captureModeChanged() {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    @objc private func recordingsChanged() {
+        refreshGalleryBadge()
+    }
+
     @objc private func handleGallery() {
-        // Open Photos app
-        if let url = URL(string: "photos-redirect://") {
-            UIApplication.shared.open(url)
+        cameraManager?.stopRunning()
+        let vc = RecordingsListViewController()
+        present(vc, animated: true)
+    }
+
+    // MARK: - Photo Capture
+
+    private func takePhoto() {
+        guard recordButton.isEnabled else { return }
+        recordButton.isEnabled = false
+
+        // 快门闪白
+        let flash = UIView(frame: view.bounds)
+        flash.backgroundColor = .white
+        flash.alpha = 0
+        flash.isUserInteractionEnabled = false
+        view.addSubview(flash)
+        UIView.animate(withDuration: 0.08, animations: { flash.alpha = 0.7 }) { _ in
+            UIView.animate(withDuration: 0.18) { flash.alpha = 0 } completion: { _ in
+                flash.removeFromSuperview()
+            }
         }
+
+        if AppSettings.shared.saveComposite {
+            videoRecorder.makePhotoComposite { [weak self] compositeBuffer in
+                guard let self else { return }
+                self.finalizePhotoCapture(
+                    composite: compositeBuffer,
+                    back:  self.videoRecorder.latestBackPixelBuffer,
+                    front: self.videoRecorder.latestFrontPixelBuffer
+                )
+            }
+        } else {
+            finalizePhotoCapture(
+                composite: nil,
+                back:  videoRecorder.latestBackPixelBuffer,
+                front: videoRecorder.latestFrontPixelBuffer
+            )
+        }
+    }
+
+    private func finalizePhotoCapture(composite: CVPixelBuffer?,
+                                       back: CVPixelBuffer?,
+                                       front: CVPixelBuffer?) {
+        let settings = AppSettings.shared
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let ctx = CIContext(options: [.useSoftwareRenderer: false])
+            var images: [UIImage] = []
+
+            if let buf = composite, let img = self.cvBufferToImage(buf, context: ctx) {
+                images.append(img)
+            }
+            if settings.saveBack, let buf = back,
+               let img = self.cvBufferToImage(buf, context: ctx) { images.append(img) }
+            if settings.saveFront, let buf = front,
+               let img = self.cvBufferToImage(buf, context: ctx) { images.append(img) }
+
+            guard !images.isEmpty else {
+                DispatchQueue.main.async { self.recordButton.isEnabled = true }
+                return
+            }
+            let group = DispatchGroup()
+            var saveError: Error?
+            for img in images {
+                group.enter()
+                PHPhotoLibrary.shared().performChanges({
+                    PHAssetChangeRequest.creationRequestForAsset(from: img)
+                }) { _, error in
+                    if let e = error { saveError = e }
+                    group.leave()
+                }
+            }
+            group.notify(queue: .main) { [weak self] in
+                self?.recordButton.isEnabled = true
+                if let e = saveError {
+                    self?.showAlert(title: "拍照失败", message: e.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func cvBufferToImage(_ buffer: CVPixelBuffer, context: CIContext) -> UIImage? {
+        let ciImage = CIImage(cvPixelBuffer: buffer)
+        guard let cg = context.createCGImage(ciImage, from: ciImage.extent) else { return nil }
+        return UIImage(cgImage: cg)
     }
 
     // MARK: - Not supported / alerts
@@ -1368,5 +1569,50 @@ final class ToolbarButton: UIControl {
 
     override var isHighlighted: Bool {
         didSet { alpha = isHighlighted ? 0.6 : 1.0 }
+    }
+}
+
+// PiP 水印：应用图标 + 文字，仅非会员显示
+final class PiPWatermarkView: UIView {
+
+    private let iconView  = UIImageView()
+    private let textLabel = UILabel()
+
+    var preferredSize: CGSize {
+        textLabel.sizeToFit()
+        return CGSize(width: 14 + 3 + textLabel.frame.width, height: 16)
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+
+        iconView.image = UIImage(named: "icon_200")
+        iconView.contentMode = .scaleAspectFit
+        iconView.layer.cornerRadius = 2
+        iconView.clipsToBounds = true
+        addSubview(iconView)
+
+        textLabel.text      = "Double Rec"
+        textLabel.font      = UIFont.monospacedSystemFont(ofSize: 7.5, weight: .semibold)
+        textLabel.textColor = .white
+        textLabel.layer.shadowColor   = UIColor.black.cgColor
+        textLabel.layer.shadowOffset  = CGSize(width: 0.5, height: 0.5)
+        textLabel.layer.shadowRadius  = 1.5
+        textLabel.layer.shadowOpacity = 1.0
+        textLabel.layer.rasterizationScale = UIScreen.main.scale
+        textLabel.layer.shouldRasterize   = true
+        addSubview(textLabel)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let iconSize: CGFloat = 12
+        iconView.frame = CGRect(x: 0, y: (bounds.height - iconSize) / 2,
+                                width: iconSize, height: iconSize)
+        textLabel.sizeToFit()
+        textLabel.frame.origin = CGPoint(x: iconSize + 3,
+                                          y: (bounds.height - textLabel.frame.height) / 2)
     }
 }

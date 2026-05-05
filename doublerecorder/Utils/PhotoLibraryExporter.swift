@@ -4,7 +4,9 @@ class PhotoLibraryExporter {
 
     func exportSession(_ session: RecordingSession,
                        completion: @escaping (Result<Void, Error>) -> Void) {
-        let urls = [session.compositeVideoURL, session.backVideoURL, session.frontVideoURL]
+        let urls = [session.compositeVideoURL, session.backVideoURL, session.frontVideoURL].compactMap { $0 }
+        guard !urls.isEmpty else { completion(.success(())); return }
+
         var saveError: Error?
         let group = DispatchGroup()
 

@@ -7,11 +7,15 @@ class VideoRecorder {
 
     private(set) var state: State = .idle
 
+    // 保存配置（录制开始前由外部设置）
+    var saveComposite = true
+    var saveBack      = true
+    var saveFront     = true
+
     private var compositeWriter: AVAssetWriter?
     private var backWriter:      AVAssetWriter?
     private var frontWriter:     AVAssetWriter?
 
-    // 延迟到拿到真实尺寸后才创建
     private var compositeVideoInput: AVAssetWriterInput?
     private var backVideoInput:      AVAssetWriterInput?
     private var frontVideoInput:     AVAssetWriterInput?
@@ -23,11 +27,12 @@ class VideoRecorder {
 
     private let compositor = PiPCompositor()
 
-    private var latestFrontPixelBuffer: CVPixelBuffer?
+    private(set) var latestBackPixelBuffer:  CVPixelBuffer?
+    private(set) var latestFrontPixelBuffer: CVPixelBuffer?
+
     private var sessionStartTime: CMTime = .invalid
     private var writersInitialized = false
 
-    // 从第一帧检测真实尺寸
     private var backDimensions:  (width: Int, height: Int)?
     private var frontDimensions: (width: Int, height: Int)?
     private var pendingBackBuffer: CMSampleBuffer?
@@ -42,16 +47,15 @@ class VideoRecorder {
         guard state == .idle else { throw RecorderError.alreadyRecording }
 
         let timestamp = DateFormatter.fileTimestamp.string(from: Date())
-        compositeWriter = try AVAssetWriter(url: makeOutputURL(suffix: "composite_\(timestamp)"), fileType: .mp4)
-        backWriter      = try AVAssetWriter(url: makeOutputURL(suffix: "back_\(timestamp)"),      fileType: .mp4)
-        frontWriter     = try AVAssetWriter(url: makeOutputURL(suffix: "front_\(timestamp)"),     fileType: .mp4)
+        compositeWriter = saveComposite ? try AVAssetWriter(url: makeOutputURL(suffix: "composite_\(timestamp)"), fileType: .mp4) : nil
+        backWriter      = saveBack      ? try AVAssetWriter(url: makeOutputURL(suffix: "back_\(timestamp)"),      fileType: .mp4) : nil
+        frontWriter     = saveFront     ? try AVAssetWriter(url: makeOutputURL(suffix: "front_\(timestamp)"),     fileType: .mp4) : nil
 
         writersInitialized = false
         backDimensions     = nil
         frontDimensions    = nil
         pendingBackBuffer  = nil
         sessionStartTime   = .invalid
-        latestFrontPixelBuffer = nil
         recordingStartDate = Date()
         state = .waitingForDimensions
     }
@@ -101,16 +105,13 @@ class VideoRecorder {
                 self.state = .idle
 
                 if let err = finishError { completion(.failure(err)); return }
-                guard let cURL = compositeURL, let bURL = backURL, let fURL = frontURL else {
-                    completion(.failure(RecorderError.writerSetupFailed("输出路径为空"))); return
-                }
                 completion(.success(RecordingSession(
                     sessionID: UUID().uuidString,
                     startDate: self.recordingStartDate,
                     endDate: endDate,
-                    compositeVideoURL: cURL,
-                    backVideoURL: bURL,
-                    frontVideoURL: fURL
+                    compositeVideoURL: compositeURL,
+                    backVideoURL: backURL,
+                    frontVideoURL: frontURL
                 )))
             }
         }
@@ -119,9 +120,14 @@ class VideoRecorder {
     // MARK: - 帧输入
 
     func appendBackVideoFrame(_ sampleBuffer: CMSampleBuffer) {
-        guard state == .waitingForDimensions || state == .recording else { return }
         writeQueue.async { [weak self] in
             guard let self else { return }
+
+            if let pb = CMSampleBufferGetImageBuffer(sampleBuffer) {
+                self.latestBackPixelBuffer = pb
+            }
+
+            guard self.state == .waitingForDimensions || self.state == .recording else { return }
 
             if !self.writersInitialized {
                 if self.backDimensions == nil,
@@ -137,14 +143,14 @@ class VideoRecorder {
     }
 
     func appendFrontVideoFrame(_ sampleBuffer: CMSampleBuffer) {
-        guard state == .waitingForDimensions || state == .recording else { return }
         writeQueue.async { [weak self] in
             guard let self else { return }
 
-            // 始终更新最新前摄帧供合成使用
             if let pb = CMSampleBufferGetImageBuffer(sampleBuffer) {
                 self.latestFrontPixelBuffer = pb
             }
+
+            guard self.state == .waitingForDimensions || self.state == .recording else { return }
 
             if !self.writersInitialized {
                 if self.frontDimensions == nil,
@@ -169,35 +175,76 @@ class VideoRecorder {
         }
     }
 
-    // MARK: - 延迟初始化（拿到前后摄真实尺寸后）
+    // MARK: - PiP 角落同步（合成视频跟随预览位置）
+
+    func updatePiPCorner(isLeft: Bool, isTop: Bool) {
+        writeQueue.async { [weak self] in
+            self?.compositor?.updateCorner(isLeft: isLeft, isTop: isTop)
+        }
+    }
+
+    func updatePiPOrigin(normalizedX: Float, normalizedY: Float) {
+        writeQueue.async { [weak self] in
+            self?.compositor?.updateOrigin(normalizedX: normalizedX, normalizedY: normalizedY)
+        }
+    }
+
+    // MARK: - 拍照用快照
+
+    func makePhotoComposite(completion: @escaping (CVPixelBuffer?) -> Void) {
+        writeQueue.async { [weak self] in
+            guard let self,
+                  let back  = self.latestBackPixelBuffer,
+                  let front = self.latestFrontPixelBuffer,
+                  let comp  = self.compositor else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            // 录制前拍照时 compositor 尚未被 tryInitializeWriters 配置，在此按需配置
+            if !self.writersInitialized {
+                comp.configure(backWidth:  CVPixelBufferGetWidth(back),
+                               backHeight: CVPixelBufferGetHeight(back),
+                               frontWidth:  CVPixelBufferGetWidth(front),
+                               frontHeight: CVPixelBufferGetHeight(front))
+            }
+            let result = comp.composite(backBuffer: back, frontBuffer: front)
+            DispatchQueue.main.async { completion(result) }
+        }
+    }
+
+    // MARK: - 延迟初始化
 
     private func tryInitializeWriters() {
         guard !writersInitialized,
               let back  = backDimensions,
-              let front = frontDimensions,
-              let compositeWriter, let backWriter, let frontWriter
+              let front = frontDimensions
         else { return }
 
-        // 用真实尺寸配置 PiP 宽高比
+        guard compositeWriter != nil || backWriter != nil || frontWriter != nil else { return }
+
         compositor?.configure(backWidth: back.width, backHeight: back.height,
                               frontWidth: front.width, frontHeight: front.height)
 
-        // 合成视频用后摄分辨率，独立视频各用各自分辨率
-        compositeVideoInput = makeVideoInput(settings: videoSettings(width: back.width,  height: back.height))
-        backVideoInput      = makeVideoInput(settings: videoSettings(width: back.width,  height: back.height))
-        frontVideoInput     = makeVideoInput(settings: videoSettings(width: front.width, height: front.height))
-        compositeAudioInput = makeAudioInput()
-        backAudioInput      = makeAudioInput()
-        frontAudioInput     = makeAudioInput()
-
-        for (writer, videoInput, audioInput) in [
-            (compositeWriter, compositeVideoInput!, compositeAudioInput!),
-            (backWriter,      backVideoInput!,      backAudioInput!),
-            (frontWriter,     frontVideoInput!,     frontAudioInput!)
-        ] {
-            if writer.canAdd(videoInput) { writer.add(videoInput) }
-            if writer.canAdd(audioInput) { writer.add(audioInput) }
-            writer.startWriting()
+        if let w = compositeWriter {
+            compositeVideoInput = makeVideoInput(settings: videoSettings(width: back.width, height: back.height))
+            compositeAudioInput = makeAudioInput()
+            if w.canAdd(compositeVideoInput!) { w.add(compositeVideoInput!) }
+            if w.canAdd(compositeAudioInput!) { w.add(compositeAudioInput!) }
+            w.startWriting()
+        }
+        if let w = backWriter {
+            backVideoInput = makeVideoInput(settings: videoSettings(width: back.width, height: back.height))
+            backAudioInput = makeAudioInput()
+            if w.canAdd(backVideoInput!) { w.add(backVideoInput!) }
+            if w.canAdd(backAudioInput!) { w.add(backAudioInput!) }
+            w.startWriting()
+        }
+        if let w = frontWriter {
+            frontVideoInput = makeVideoInput(settings: videoSettings(width: front.width, height: front.height))
+            frontAudioInput = makeAudioInput()
+            if w.canAdd(frontVideoInput!) { w.add(frontVideoInput!) }
+            if w.canAdd(frontAudioInput!) { w.add(frontAudioInput!) }
+            w.startWriting()
         }
 
         writersInitialized = true
@@ -225,21 +272,18 @@ class VideoRecorder {
             input.append(sampleBuffer)
         }
 
-        guard
-            let compositor,
-            let backBuffer  = CMSampleBufferGetImageBuffer(sampleBuffer),
-            let frontBuffer = latestFrontPixelBuffer,
-            let composed    = compositor.composite(backBuffer: backBuffer, frontBuffer: frontBuffer)
+        guard saveComposite,
+              let compositor,
+              let backBuffer  = CMSampleBufferGetImageBuffer(sampleBuffer),
+              let frontBuffer = latestFrontPixelBuffer,
+              let composed    = compositor.composite(backBuffer: backBuffer, frontBuffer: frontBuffer)
         else { return }
 
         appendCompositeFrame(composed, presentationTime: pts)
     }
 
     private func appendCompositeFrame(_ pixelBuffer: CVPixelBuffer, presentationTime: CMTime) {
-        guard
-            let input = compositeVideoInput,
-            input.isReadyForMoreMediaData
-        else { return }
+        guard let input = compositeVideoInput, input.isReadyForMoreMediaData else { return }
 
         var timingInfo = CMSampleTimingInfo(
             duration: CMTime(value: 1, timescale: 30),

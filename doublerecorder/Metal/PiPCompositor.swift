@@ -70,6 +70,18 @@ class PiPCompositor {
                                frontWidth: frontWidth, frontHeight: frontHeight)
     }
 
+    // 用户拖动 PiP 改变角落时同步更新合成视频里的叠层位置
+    func updateCorner(isLeft: Bool, isTop: Bool, margin: Float = 0.03) {
+        params.pipOriginX = isLeft ? margin : 1.0 - params.pipWidth  - margin
+        params.pipOriginY = isTop  ? margin : 1.0 - params.pipHeight - margin
+    }
+
+    // 按精确归一化坐标更新叠层位置（自由拖动后使用）
+    func updateOrigin(normalizedX: Float, normalizedY: Float) {
+        params.pipOriginX = normalizedX
+        params.pipOriginY = normalizedY
+    }
+
     // MARK: - 核心合成
 
     func composite(backBuffer: CVPixelBuffer,
