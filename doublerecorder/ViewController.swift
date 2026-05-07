@@ -16,7 +16,7 @@ class ViewController: UIViewController {
     private var isSwapped    = false
     private var configuredPiPCamera = AppSettings.shared.pipCamera
     private var recordingOrientationMask: UIInterfaceOrientationMask?
-    private var pipCorner: PiPCorner = .bottomRight
+    private var pipCorner: PiPCorner = .bottomLeft
     private var lockedOrientation: AVCaptureVideoOrientation?
     private var recordingSeconds = 0
     private var audioLevelValue: Float = 0
@@ -169,6 +169,9 @@ class ViewController: UIViewController {
 
     override func viewWillTransition(to size: CGSize,
                                      with coordinator: UIViewControllerTransitionCoordinator) {
+        if self.recordButton.isRecording {
+           return
+        }
         super.viewWillTransition(to: size, with: coordinator)
         coordinator.animate(alongsideTransition: { [weak self] _ in
             self?.applyLayout(for: size)
@@ -404,8 +407,10 @@ class ViewController: UIViewController {
         }
 
         // Initial active state driven by AppSettings
-        mirrorBtn.isActive = AppSettings.shared.recordMirrored
-        pipCamBtn.isActive = AppSettings.shared.pipCamera == .backUltraWide
+        mirrorBtn.isActive    = AppSettings.shared.recordMirrored
+        let pipIsWide = AppSettings.shared.pipCamera == .backUltraWide
+        pipCamBtn.isActive    = pipIsWide
+        pipCamBtn.titleText   = pipIsWide ? "WIDE" : "PiP"
         if #available(iOS 13.0, *) {
             pipCamBtn.isEnabled = CameraManager.isUltraWideMultiCamSupported
         } else {
@@ -784,7 +789,7 @@ class ViewController: UIViewController {
         let safe = view.safeAreaInsets
         let m = margins ?? (isL
             ? PiPMargins(top: safe.top + 14, bottom: safe.bottom + 80, left: safe.left + 60, right: safe.right + 130)
-            : PiPMargins(top: safe.top + 8, bottom: safe.bottom + 150, left: 8, right: 8))
+            : PiPMargins(top: safe.top + 8, bottom: safe.bottom + 196, left: 8, right: 8))
 
         let origin = pipPosition(for: corner, size: s, pipSize: ps, margins: m)
 
@@ -1157,9 +1162,11 @@ class ViewController: UIViewController {
             }
             AppSettings.shared.pipCamera = .backUltraWide
             pipCamBtn.isActive = true
+            pipCamBtn.titleText = "WIDE"
         } else {
             AppSettings.shared.pipCamera = .front
             pipCamBtn.isActive = false
+            pipCamBtn.titleText = "PiP"
         }
         rebuildCamera()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -1264,6 +1271,7 @@ class ViewController: UIViewController {
     @objc private func handleGallery() {
         cameraManager?.stopRunning()
         let vc = RecordingsListViewController()
+        vc.modalPresentationStyle = .fullScreen
         present(vc, animated: true)
     }
 
@@ -1618,6 +1626,7 @@ final class ToolbarButton: UIControl {
     static var totalHeight: CGFloat { iconAreaH + labelGap + labelH }
 
     var isActive: Bool = false { didSet { updateStyle() } }
+    var titleText: String? { didSet { titleLbl.text = titleText } }
 
     private let iconOn:  String
     private let iconOff: String?
