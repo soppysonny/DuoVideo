@@ -225,14 +225,16 @@ extension RecordingsListViewController: UITableViewDataSource, UITableViewDelega
 
 private final class VideoCell: UITableViewCell {
 
-    private let thumbBG       = UIView()
-    private let thumbImgView  = UIImageView()
-    private let playIcon      = UIImageView()
-    private let dateLabel     = UILabel()
-    private let filenameLabel = UILabel()
-    private let durationLabel = UILabel()
-    private let typeBadge     = UIView()
-    private let typeBadgeLbl  = UILabel()
+    private let thumbBG         = UIView()
+    private let thumbImgView    = UIImageView()
+    private let playIcon        = UIImageView()
+    private let mediaTypeBadge  = UIView()
+    private let mediaTypeIcon   = UIImageView()
+    private let dateLabel       = UILabel()
+    private let filenameLabel   = UILabel()
+    private let durationLabel   = UILabel()
+    private let typeBadge       = UIView()
+    private let typeBadgeLbl    = UILabel()
     private var thumbTask: DispatchWorkItem?
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
@@ -261,6 +263,19 @@ private final class VideoCell: UITableViewCell {
         playIcon.contentMode = .center
         playIcon.translatesAutoresizingMaskIntoConstraints = false
         thumbBG.addSubview(playIcon)
+
+        // Media-type badge — bottom-right corner of thumbnail
+        mediaTypeBadge.backgroundColor    = UIColor.black.withAlphaComponent(0.52)
+        mediaTypeBadge.layer.cornerRadius = 4
+        mediaTypeBadge.translatesAutoresizingMaskIntoConstraints = false
+        thumbBG.addSubview(mediaTypeBadge)
+
+        let badgeCfg = UIImage.SymbolConfiguration(pointSize: 8, weight: .medium)
+        mediaTypeIcon.contentMode = .center
+        mediaTypeIcon.tintColor   = UIColor.white.withAlphaComponent(0.85)
+        mediaTypeIcon.preferredSymbolConfiguration = badgeCfg
+        mediaTypeIcon.translatesAutoresizingMaskIntoConstraints = false
+        mediaTypeBadge.addSubview(mediaTypeIcon)
 
         dateLabel.font      = UIFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
         dateLabel.textColor = .white
@@ -305,6 +320,14 @@ private final class VideoCell: UITableViewCell {
             playIcon.centerXAnchor.constraint(equalTo: thumbBG.centerXAnchor),
             playIcon.centerYAnchor.constraint(equalTo: thumbBG.centerYAnchor),
 
+            mediaTypeBadge.trailingAnchor.constraint(equalTo: thumbBG.trailingAnchor, constant: -5),
+            mediaTypeBadge.bottomAnchor.constraint(equalTo: thumbBG.bottomAnchor, constant: -5),
+            mediaTypeBadge.widthAnchor.constraint(equalToConstant: 20),
+            mediaTypeBadge.heightAnchor.constraint(equalToConstant: 16),
+
+            mediaTypeIcon.centerXAnchor.constraint(equalTo: mediaTypeBadge.centerXAnchor),
+            mediaTypeIcon.centerYAnchor.constraint(equalTo: mediaTypeBadge.centerYAnchor),
+
             dateLabel.leadingAnchor.constraint(equalTo: thumbBG.trailingAnchor, constant: 12),
             dateLabel.topAnchor.constraint(equalTo: thumbBG.topAnchor, constant: 4),
 
@@ -348,6 +371,10 @@ private final class VideoCell: UITableViewCell {
 
         thumbImgView.image = nil
         thumbTask?.cancel()
+
+        let badgeCfg = UIImage.SymbolConfiguration(pointSize: 8, weight: .medium)
+        let badgeIconName = record.isPhoto ? "photo.fill" : "video.fill"
+        mediaTypeIcon.image = UIImage(systemName: badgeIconName, withConfiguration: badgeCfg)
 
         let url = record.url
         if record.isPhoto {
