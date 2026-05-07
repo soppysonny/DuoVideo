@@ -218,8 +218,7 @@ class ViewController: UIViewController {
         pipContainerView.layer.borderColor  = UIColor.white.withAlphaComponent(0.25).cgColor
         view.addSubview(pipContainerView)
 
-        frontPreviewView.frame = CGRect(origin: .zero, size: CGSize(width: 100, height: 133))
-        frontPreviewView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        frontPreviewView.frame = pipContainerView.bounds
         pipContainerView.addSubview(frontPreviewView)
 
         // Top label bar gradient
@@ -663,6 +662,7 @@ class ViewController: UIViewController {
         let pipW = shorter * 0.30
         let pipH = pipW * 4.0 / 3.0
         pipContainerView.bounds = CGRect(x: 0, y: 0, width: pipW, height: pipH)
+        frontPreviewView.frame = pipContainerView.bounds
 
         let margins = isLandscape
             ? PiPMargins(top: safe.top + 14, bottom: safe.bottom + 80, left: safe.left + 60, right: safe.right + 130)
