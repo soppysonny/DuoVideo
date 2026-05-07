@@ -182,20 +182,20 @@ class SettingsViewController: UIViewController {
         vStack.addArrangedSubview(fpsRow)
         vStack.setCustomSpacing(32, after: fpsRow)
 
-        // ── PiP 摄像头 ────────────────────────────────────────
-        vStack.addArrangedSubview(sectionLabel("PiP 摄像头"))
+        // ── 主摄像头（大窗口）────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel("主摄像头"))
         vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
 
         let pipRow = makePickerRow()
-        let pipOptions: [(String, String, AppSettings.PiPCamera)] = [
-            ("前置", "FRONT",      .front),
+        let pipOptions: [(String, String, AppSettings.BackgroundCamera)] = [
             ("后广角", "BACK WIDE", .back),
+            ("前置",   "FRONT",     .front),
         ]
         for opt in pipOptions {
             let tile = OptionTile(title: opt.0, subtitle: opt.1)
             let cam  = opt.2
             tile.onTap = { [weak self] in
-                self?.settings.pipCamera = cam
+                self?.settings.backgroundCamera = cam
                 self?.syncPipTiles()
                 NotificationCenter.default.post(name: .pipCameraChanged, object: nil)
             }
@@ -259,8 +259,8 @@ class SettingsViewController: UIViewController {
     }
 
     private func syncPipTiles() {
-        let order: [AppSettings.PiPCamera] = [.front, .back]
-        for (tile, val) in zip(pipTiles, order) { tile.isSelected = val == settings.pipCamera }
+        let order: [AppSettings.BackgroundCamera] = [.back, .front]
+        for (tile, val) in zip(pipTiles, order) { tile.isSelected = val == settings.backgroundCamera }
     }
 
     // MARK: - Actions

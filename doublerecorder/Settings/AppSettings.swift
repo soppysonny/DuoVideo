@@ -73,13 +73,14 @@ final class AppSettings {
         set { UserDefaults.standard.set(newValue, forKey: "recordMirrored") }
     }
 
-    // MARK: - PiP camera
+    // MARK: - Background camera（大窗口主摄像头）
 
-    enum PiPCamera: String { case front, back }
+    /// 大窗口使用哪个摄像头：.back = 后广角为主（默认），.front = 前置为主
+    enum BackgroundCamera: String { case back, front }
 
-    var pipCamera: PiPCamera {
-        get { PiPCamera(rawValue: UserDefaults.standard.string(forKey: "pipCamera") ?? "") ?? .front }
-        set { UserDefaults.standard.set(newValue.rawValue, forKey: "pipCamera") }
+    var backgroundCamera: BackgroundCamera {
+        get { BackgroundCamera(rawValue: UserDefaults.standard.string(forKey: "backgroundCamera") ?? "") ?? .back }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "backgroundCamera") }
     }
 
     // MARK: - Pro

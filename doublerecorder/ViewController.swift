@@ -1201,7 +1201,8 @@ class ViewController: UIViewController {
     }
 
     private func applyPiPCameraSettings() {
-        let pipIsBack = AppSettings.shared.pipCamera == .back
+        // 前置为主画面 → 后摄进 PiP；后广角为主画面 → 前摄进 PiP（默认）
+        let pipIsBack = AppSettings.shared.backgroundCamera == .front
         videoRecorder.pipCameraIsBack = pipIsBack
 
         let bl = cameraManager?.backPreviewLayer
