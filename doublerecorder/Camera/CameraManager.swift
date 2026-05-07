@@ -115,7 +115,7 @@ class CameraManager: NSObject {
         }
     }
 
-    /// 前摄预览镜像
+    /// 前摄预览镜像（仅影响 preview，不影响录制）
     func setFrontMirror(_ mirrored: Bool) {
         DispatchQueue.main.async { [weak self] in
             guard let conn = self?.frontPreviewConnection,
@@ -123,6 +123,10 @@ class CameraManager: NSObject {
             conn.automaticallyAdjustsVideoMirroring = false
             conn.isVideoMirrored = mirrored
         }
+    }
+
+    /// 前摄录制镜像（影响数据输出，进而影响所有录制文件）
+    func setFrontRecordingMirror(_ mirrored: Bool) {
         sessionQueue.async { [weak self] in
             guard let conn = self?.frontDataConnection,
                   conn.isVideoMirroringSupported else { return }

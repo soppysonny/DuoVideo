@@ -59,6 +59,13 @@ final class AppSettings {
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "frameRate") }
     }
 
+    // MARK: - Recording mirror
+
+    var recordMirrored: Bool {
+        get { UserDefaults.standard.bool(forKey: "recordMirrored") }
+        set { UserDefaults.standard.set(newValue, forKey: "recordMirrored") }
+    }
+
     // MARK: - Pro
 
     var isProUser: Bool {
@@ -68,5 +75,6 @@ final class AppSettings {
 }
 
 extension Notification.Name {
-    static let captureModeChanged = Notification.Name("captureModeChanged")
+    static let captureModeChanged   = Notification.Name("captureModeChanged")
+    static let recordMirrorChanged  = Notification.Name("recordMirrorChanged")
 }

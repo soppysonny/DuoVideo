@@ -112,6 +112,8 @@ class ViewController: UIViewController {
                                                name: .captureModeChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(recordingsChanged),
                                                name: .recordingsChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(recordMirrorChanged),
+                                               name: .recordMirrorChanged, object: nil)
         setupUI()
         checkSupportAndRequestPermissions()
     }
@@ -124,6 +126,7 @@ class ViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         cameraManager?.startRunning()
+        cameraManager?.setFrontRecordingMirror(AppSettings.shared.recordMirrored)
         syncOrientationIfNeeded()
         refreshGalleryBadge()
         syncHUDLabels()
@@ -890,6 +893,7 @@ class ViewController: UIViewController {
                 if let fl = mgr.frontPreviewLayer { self.frontPreviewView.attachPreviewLayer(fl) }
                 mgr.startRunning()
                 mgr.setFrontMirror(self.isFrontMirror)
+                mgr.setFrontRecordingMirror(AppSettings.shared.recordMirrored)
                 self.syncOrientationIfNeeded()
             case .failure(let err):
                 self.showAlert(title: "摄像头初始化失败", message: err.localizedDescription)
@@ -1174,6 +1178,10 @@ class ViewController: UIViewController {
 
     @objc private func recordingsChanged() {
         refreshGalleryBadge()
+    }
+
+    @objc private func recordMirrorChanged() {
+        cameraManager?.setFrontRecordingMirror(AppSettings.shared.recordMirrored)
     }
 
     @objc private func handleGallery() {

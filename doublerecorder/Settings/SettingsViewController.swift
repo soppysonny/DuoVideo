@@ -8,6 +8,7 @@ class SettingsViewController: UIViewController {
     private let compositeRow = SettingsToggleRow(title: "COMPOSITE", subtitle: "前后摄 PiP 合成视频")
     private let backRow      = SettingsToggleRow(title: "BACK CAM",  subtitle: "后摄独立视频")
     private let frontRow     = SettingsToggleRow(title: "FRONT CAM", subtitle: "前摄独立视频")
+    private let mirrorRow    = SettingsToggleRow(title: "MIRROR",    subtitle: "前摄录制镜像翻转")
 
     private var resTiles: [OptionTile] = []
     private var fpsTiles: [OptionTile] = []
@@ -117,6 +118,19 @@ class SettingsViewController: UIViewController {
             vStack.setCustomSpacing(i < toggleRows.count - 1 ? 1 : 32, after: row)
         }
 
+        // ── 录制效果 ──────────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel("录制效果"))
+        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
+
+        mirrorRow.onToggle = { [weak self] val in
+            self?.settings.recordMirrored = val
+            NotificationCenter.default.post(name: .recordMirrorChanged, object: nil)
+        }
+        mirrorRow.setCorners(top: true, bottom: true)
+        mirrorRow.heightAnchor.constraint(equalToConstant: 56).isActive = true
+        vStack.addArrangedSubview(mirrorRow)
+        vStack.setCustomSpacing(32, after: mirrorRow)
+
         // ── 清晰度 ────────────────────────────────────────────
         vStack.addArrangedSubview(sectionLabel("清晰度"))
         vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
@@ -199,6 +213,7 @@ class SettingsViewController: UIViewController {
         compositeRow.isOn = settings.saveComposite
         backRow.isOn      = settings.saveBack
         frontRow.isOn     = settings.saveFront
+        mirrorRow.isOn    = settings.recordMirrored
         syncResTiles()
         syncFpsTiles()
     }

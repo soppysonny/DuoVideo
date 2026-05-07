@@ -59,7 +59,6 @@ fragment float4 pip_fragment(VertexOut in [[stage_in]],
 
     // 将屏幕 UV 映射到前摄纹理坐标
     float2 frontUV = (uv - params.pipOrigin) / params.pipSize;
-    frontUV.x = 1.0 - frontUV.x; // 前摄镜像翻转（符合自拍预期）
 
     if (frontUV.x < 0.0 || frontUV.x > 1.0 || frontUV.y < 0.0 || frontUV.y > 1.0) {
         return backColor;
