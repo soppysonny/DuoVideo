@@ -16,6 +16,7 @@ class ViewController: UIViewController {
     private var isAELocked   = false
     private var isSwapped    = false
     private var configuredPiPCamera = AppSettings.shared.pipCamera
+    private var recordingOrientationMask: UIInterfaceOrientationMask?
     private var pipCorner: PiPCorner = .bottomRight
     private var lockedOrientation: AVCaptureVideoOrientation?
     private var recordingSeconds = 0
@@ -163,6 +164,9 @@ class ViewController: UIViewController {
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
     override var prefersStatusBarHidden: Bool { true }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        recordingOrientationMask ?? .all
+    }
 
     override func viewWillTransition(to size: CGSize,
                                      with coordinator: UIViewControllerTransitionCoordinator) {
@@ -964,6 +968,7 @@ class ViewController: UIViewController {
         let orientation = AVCaptureVideoOrientation(device: UIDevice.current.orientation) ?? .portrait
         lockedOrientation = orientation
         cameraManager?.setVideoOrientation(orientation)
+        recordingOrientationMask = view.window?.windowScene?.interfaceOrientation.asMask ?? .portrait
         videoRecorder.isMicMuted    = isMicMuted
         videoRecorder.saveComposite = AppSettings.shared.saveComposite
         videoRecorder.saveBack      = AppSettings.shared.saveBack
@@ -990,6 +995,12 @@ class ViewController: UIViewController {
 
     private func stopRecording() {
         lockedOrientation = nil
+        recordingOrientationMask = nil
+        if #available(iOS 16.0, *) {
+            setNeedsUpdateOfSupportedInterfaceOrientations()
+        } else {
+            UIViewController.attemptRotationToDeviceOrientation()
+        }
         stopTimer()
         stopDisplayLink()
         recordButton.isEnabled = false
@@ -1455,6 +1466,20 @@ extension ViewController: CameraManagerDelegate {
             }
         }
         return min(sqrt(sum / Float(sampleCount)) * 4.0, 1.0)
+    }
+}
+
+// MARK: - UIInterfaceOrientation → UIInterfaceOrientationMask
+
+private extension UIInterfaceOrientation {
+    var asMask: UIInterfaceOrientationMask {
+        switch self {
+        case .portrait:           return .portrait
+        case .portraitUpsideDown: return .portraitUpsideDown
+        case .landscapeLeft:      return .landscapeLeft
+        case .landscapeRight:     return .landscapeRight
+        default:                  return .portrait
+        }
     }
 }
 
