@@ -1,20 +1,18 @@
 import UIKit
 import AVFoundation
 import AVKit
+import CoreMedia
 
 class RecordingsListViewController: UIViewController {
 
     // MARK: - Data model
 
-    struct SessionRecord {
-        let timestamp: String
+    struct VideoRecord {
+        let filename: String  // base name without extension, e.g. "20241205143022-merged"
         let date: Date
-        var compositeURL: URL?
-        var backURL: URL?
-        var frontURL: URL?
+        let type: String      // "merged", "back", "front"
+        let url: URL
         var durationSeconds: Int = 0
-
-        var primaryURL: URL? { compositeURL ?? backURL ?? frontURL }
 
         var displayTitle: String {
             let df = DateFormatter()
@@ -27,14 +25,15 @@ class RecordingsListViewController: UIViewController {
             let s = durationSeconds % 60
             return m > 0 ? "\(m):\(String(format: "%02d", s))" : "0:\(String(format: "%02d", s))"
         }
+        var typeDisplay: String { type.uppercased() }
     }
 
     // MARK: - Views
 
-    private var sessions: [SessionRecord] = []
-    private let tableView   = UITableView(frame: .zero, style: .plain)
-    private let titleLabel  = UILabel()
-    private let emptyLabel  = UILabel()
+    private var records: [VideoRecord] = []
+    private let tableView  = UITableView(frame: .zero, style: .plain)
+    private let titleLabel = UILabel()
+    private let emptyLabel = UILabel()
 
     // MARK: - Lifecycle
 
@@ -73,7 +72,7 @@ class RecordingsListViewController: UIViewController {
         tableView.separatorStyle  = .none
         tableView.delegate   = self
         tableView.dataSource = self
-        tableView.register(SessionCell.self, forCellReuseIdentifier: "SessionCell")
+        tableView.register(VideoCell.self, forCellReuseIdentifier: "VideoCell")
         tableView.contentInset = UIEdgeInsets(top: 4, left: 0, bottom: 24, right: 0)
         tableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
@@ -106,43 +105,30 @@ class RecordingsListViewController: UIViewController {
         let dir = Self.recordingsDirectory()
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: nil, options: .skipsHiddenFiles
-        ) else { sessions = []; refresh(); return }
+        ) else { records = []; refresh(); return }
 
-        var map: [String: SessionRecord] = [:]
-
+        var result: [VideoRecord] = []
         for url in files where url.pathExtension.lowercased() == "mp4" {
-            let name  = url.deletingPathExtension().lastPathComponent
-            // name format: composite_20241205_143022 or back_20241205_143022 or front_…
-            guard let under = name.firstIndex(of: "_") else { continue }
-            let type = String(name[name.startIndex ..< under])
-            let ts   = String(name[name.index(after: under)...])
-            guard !ts.isEmpty else { continue }
-
-            if map[ts] == nil {
-                map[ts] = SessionRecord(timestamp: ts, date: Self.parseDate(ts) ?? Date.distantPast)
-            }
-            switch type {
-            case "composite": map[ts]?.compositeURL = url
-            case "back":      map[ts]?.backURL      = url
-            case "front":     map[ts]?.frontURL     = url
-            default: break
-            }
+            let name = url.deletingPathExtension().lastPathComponent
+            // format: yyyyMMddHHmmss-type  e.g. 20241205143022-merged
+            guard let dash = name.firstIndex(of: "-") else { continue }
+            let ts   = String(name[name.startIndex ..< dash])
+            let type = String(name[name.index(after: dash)...])
+            guard ts.count == 14, !type.isEmpty else { continue }
+            let date = Self.parseDate(ts) ?? Date.distantPast
+            result.append(VideoRecord(filename: name, date: date, type: type, url: url))
         }
+        records = result.sorted { $0.date > $1.date }
 
-        sessions = map.values.sorted { $0.date > $1.date }
-
-        // Async duration loading
-        for i in sessions.indices {
-            let ts = sessions[i].timestamp
-            guard let url = sessions[i].primaryURL else { continue }
+        for i in records.indices {
+            let filename = records[i].filename
+            let url = records[i].url
             DispatchQueue.global(qos: .utility).async { [weak self] in
-                let asset = AVAsset(url: url)
-                let dur   = asset.duration
-                let secs  = Int(CMTimeGetSeconds(dur))
+                let secs = Int(CMTimeGetSeconds(AVAsset(url: url).duration))
                 DispatchQueue.main.async {
                     guard let self else { return }
-                    if let idx = self.sessions.firstIndex(where: { $0.timestamp == ts }) {
-                        self.sessions[idx].durationSeconds = secs
+                    if let idx = self.records.firstIndex(where: { $0.filename == filename }) {
+                        self.records[idx].durationSeconds = secs
                         self.tableView.reloadRows(at: [IndexPath(row: idx, section: 0)], with: .none)
                     }
                 }
@@ -153,8 +139,8 @@ class RecordingsListViewController: UIViewController {
     }
 
     private func refresh() {
-        let count = sessions.count
-        titleLabel.text    = count == 0 ? "RECORDINGS" : "RECORDINGS  ·  \(count)"
+        let count = records.count
+        titleLabel.text     = count == 0 ? "RECORDINGS" : "RECORDINGS  ·  \(count)"
         emptyLabel.isHidden = count > 0
         tableView.reloadData()
     }
@@ -162,17 +148,11 @@ class RecordingsListViewController: UIViewController {
     // MARK: - Helpers
 
     static func sessionCount() -> Int {
-        let dir   = recordingsDirectory()
+        let dir = recordingsDirectory()
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: nil, options: .skipsHiddenFiles
         ) else { return 0 }
-        var timestamps = Set<String>()
-        for url in files where url.pathExtension.lowercased() == "mp4" {
-            let name = url.deletingPathExtension().lastPathComponent
-            guard let idx = name.firstIndex(of: "_") else { continue }
-            timestamps.insert(String(name[name.index(after: idx)...]))
-        }
-        return timestamps.count
+        return files.filter { $0.pathExtension.lowercased() == "mp4" }.count
     }
 
     private static func recordingsDirectory() -> URL {
@@ -184,7 +164,7 @@ class RecordingsListViewController: UIViewController {
 
     private static func parseDate(_ ts: String) -> Date? {
         let df = DateFormatter()
-        df.dateFormat = "yyyyMMdd_HHmmss"
+        df.dateFormat = "yyyyMMddHHmmss"
         return df.date(from: ts)
     }
 }
@@ -194,13 +174,13 @@ class RecordingsListViewController: UIViewController {
 extension RecordingsListViewController: UITableViewDataSource, UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        sessions.count
+        records.count
     }
 
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "SessionCell", for: indexPath) as! SessionCell
-        cell.configure(with: sessions[indexPath.row])
+        let cell = tableView.dequeueReusableCell(withIdentifier: "VideoCell", for: indexPath) as! VideoCell
+        cell.configure(with: records[indexPath.row])
         return cell
     }
 
@@ -208,36 +188,7 @@ extension RecordingsListViewController: UITableViewDataSource, UITableViewDelega
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let session = sessions[indexPath.row]
-
-        // If multiple files exist, let user pick which to play
-        let available: [(String, URL)] = [
-            ("合成视频", session.compositeURL),
-            ("后摄视频", session.backURL),
-            ("前摄视频", session.frontURL),
-        ].compactMap { name, url in url.map { (name, $0) } }
-
-        guard !available.isEmpty else { return }
-
-        if available.count == 1 {
-            playVideo(available[0].1)
-        } else {
-            let sheet = UIAlertController(title: "选择播放", message: nil, preferredStyle: .actionSheet)
-            for (name, url) in available {
-                sheet.addAction(UIAlertAction(title: name, style: .default) { [weak self] _ in
-                    self?.playVideo(url)
-                })
-            }
-            sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-            if let pop = sheet.popoverPresentationController {
-                pop.sourceView = tableView.cellForRow(at: indexPath)
-            }
-            present(sheet, animated: true)
-        }
-    }
-
-    private func playVideo(_ url: URL) {
-        let player = AVPlayer(url: url)
+        let player = AVPlayer(url: records[indexPath.row].url)
         let vc = AVPlayerViewController()
         vc.player = player
         present(vc, animated: true) { player.play() }
@@ -247,10 +198,8 @@ extension RecordingsListViewController: UITableViewDataSource, UITableViewDelega
                    trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         let del = UIContextualAction(style: .destructive, title: "删除") { [weak self] _, _, done in
             guard let self else { done(false); return }
-            let session = self.sessions.remove(at: indexPath.row)
-            [session.compositeURL, session.backURL, session.frontURL]
-                .compactMap { $0 }
-                .forEach { try? FileManager.default.removeItem(at: $0) }
+            let record = self.records.remove(at: indexPath.row)
+            try? FileManager.default.removeItem(at: record.url)
             tableView.deleteRows(at: [indexPath], with: .automatic)
             self.refresh()
             NotificationCenter.default.post(name: .recordingsChanged, object: nil)
@@ -260,22 +209,24 @@ extension RecordingsListViewController: UITableViewDataSource, UITableViewDelega
     }
 }
 
-// MARK: - Session Cell
+// MARK: - Video Cell
 
-private final class SessionCell: UITableViewCell {
+private final class VideoCell: UITableViewCell {
 
     private let thumbBG       = UIView()
     private let thumbImgView  = UIImageView()
     private let playIcon      = UIImageView()
     private let dateLabel     = UILabel()
+    private let filenameLabel = UILabel()
     private let durationLabel = UILabel()
-    private let badgeStack    = UIStackView()
+    private let typeBadge     = UIView()
+    private let typeBadgeLbl  = UILabel()
     private var thumbTask: DispatchWorkItem?
 
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
-        backgroundColor  = .clear
-        selectionStyle   = .none
+        backgroundColor = .clear
+        selectionStyle  = .none
 
         let sep = UIView()
         sep.backgroundColor = UIColor.white.withAlphaComponent(0.06)
@@ -304,16 +255,24 @@ private final class SessionCell: UITableViewCell {
         dateLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(dateLabel)
 
+        filenameLabel.font      = UIFont.monospacedSystemFont(ofSize: 9, weight: .regular)
+        filenameLabel.textColor = UIColor.white.withAlphaComponent(0.38)
+        filenameLabel.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(filenameLabel)
+
         durationLabel.font      = UIFont.monospacedDigitSystemFont(ofSize: 10, weight: .regular)
         durationLabel.textColor = UIColor.white.withAlphaComponent(0.45)
         durationLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(durationLabel)
 
-        badgeStack.axis      = .horizontal
-        badgeStack.spacing   = 4
-        badgeStack.alignment = .center
-        badgeStack.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(badgeStack)
+        typeBadge.layer.cornerRadius = 3
+        typeBadge.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(typeBadge)
+
+        typeBadgeLbl.font          = UIFont.monospacedSystemFont(ofSize: 8, weight: .bold)
+        typeBadgeLbl.textAlignment = .center
+        typeBadgeLbl.translatesAutoresizingMaskIntoConstraints = false
+        typeBadge.addSubview(typeBadgeLbl)
 
         NSLayoutConstraint.activate([
             sep.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
@@ -335,38 +294,53 @@ private final class SessionCell: UITableViewCell {
             playIcon.centerYAnchor.constraint(equalTo: thumbBG.centerYAnchor),
 
             dateLabel.leadingAnchor.constraint(equalTo: thumbBG.trailingAnchor, constant: 12),
-            dateLabel.topAnchor.constraint(equalTo: thumbBG.topAnchor, constant: 6),
+            dateLabel.topAnchor.constraint(equalTo: thumbBG.topAnchor, constant: 4),
+
+            filenameLabel.leadingAnchor.constraint(equalTo: thumbBG.trailingAnchor, constant: 12),
+            filenameLabel.topAnchor.constraint(equalTo: dateLabel.bottomAnchor, constant: 4),
 
             durationLabel.leadingAnchor.constraint(equalTo: thumbBG.trailingAnchor, constant: 12),
-            durationLabel.bottomAnchor.constraint(equalTo: thumbBG.bottomAnchor, constant: -6),
+            durationLabel.bottomAnchor.constraint(equalTo: thumbBG.bottomAnchor, constant: -4),
 
-            badgeStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            badgeStack.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            typeBadge.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            typeBadge.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+
+            typeBadgeLbl.topAnchor.constraint(equalTo: typeBadge.topAnchor, constant: 3),
+            typeBadgeLbl.bottomAnchor.constraint(equalTo: typeBadge.bottomAnchor, constant: -3),
+            typeBadgeLbl.leadingAnchor.constraint(equalTo: typeBadge.leadingAnchor, constant: 6),
+            typeBadgeLbl.trailingAnchor.constraint(equalTo: typeBadge.trailingAnchor, constant: -6),
         ])
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
-    func configure(with session: RecordingsListViewController.SessionRecord) {
-        dateLabel.text     = session.displayTitle
-        durationLabel.text = session.displayDuration
+    func configure(with record: RecordingsListViewController.VideoRecord) {
+        dateLabel.text     = record.displayTitle
+        filenameLabel.text = record.filename
+        durationLabel.text = record.displayDuration
 
-        // Format badges
-        badgeStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        for (label, url) in [("C", session.compositeURL), ("B", session.backURL), ("F", session.frontURL)] {
-            badgeStack.addArrangedSubview(makeBadge(label, active: url != nil))
+        let amber = UIColor(red: 1,     green: 0.698, blue: 0.247, alpha: 1)
+        let green = UIColor(red: 0.204, green: 0.78,  blue: 0.349, alpha: 1)
+        let blue  = UIColor(red: 0.4,   green: 0.7,   blue: 1.0,   alpha: 1)
+
+        let color: UIColor
+        switch record.type {
+        case "merged": color = amber
+        case "back":   color = green
+        case "front":  color = blue
+        default:       color = UIColor.white.withAlphaComponent(0.6)
         }
+        typeBadgeLbl.text         = record.typeDisplay
+        typeBadgeLbl.textColor    = color
+        typeBadge.backgroundColor = color.withAlphaComponent(0.15)
 
-        // Thumbnail
         thumbImgView.image = nil
         playIcon.isHidden  = false
         thumbTask?.cancel()
-        guard let url = session.primaryURL else { return }
 
+        let url = record.url
         let task = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            let asset = AVAsset(url: url)
-            let gen   = AVAssetImageGenerator(asset: asset)
+            let gen = AVAssetImageGenerator(asset: AVAsset(url: url))
             gen.appliesPreferredTrackTransform = true
             gen.maximumSize = CGSize(width: 160, height: 116)
             guard let cg = try? gen.copyCGImage(at: .zero, actualTime: nil) else { return }
@@ -378,31 +352,6 @@ private final class SessionCell: UITableViewCell {
         }
         thumbTask = task
         DispatchQueue.global(qos: .utility).async(execute: task)
-    }
-
-    private func makeBadge(_ text: String, active: Bool) -> UIView {
-        let lbl = UILabel()
-        lbl.text          = text
-        lbl.font          = UIFont.monospacedSystemFont(ofSize: 8, weight: .bold)
-        lbl.textColor     = active
-            ? UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 1)
-            : UIColor.white.withAlphaComponent(0.20)
-        lbl.textAlignment = .center
-
-        let box = UIView()
-        box.layer.cornerRadius = 3
-        box.backgroundColor    = active
-            ? UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 0.12)
-            : .clear
-        lbl.translatesAutoresizingMaskIntoConstraints = false
-        box.addSubview(lbl)
-        NSLayoutConstraint.activate([
-            lbl.topAnchor.constraint(equalTo: box.topAnchor, constant: 2),
-            lbl.bottomAnchor.constraint(equalTo: box.bottomAnchor, constant: -2),
-            lbl.leadingAnchor.constraint(equalTo: box.leadingAnchor, constant: 5),
-            lbl.trailingAnchor.constraint(equalTo: box.trailingAnchor, constant: -5),
-        ])
-        return box
     }
 }
 

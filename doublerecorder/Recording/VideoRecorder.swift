@@ -26,6 +26,8 @@ class VideoRecorder {
     var isMicMuted = false
 
     private let compositor = PiPCompositor()
+    private var storedPiPOriginX: Float?
+    private var storedPiPOriginY: Float?
 
     private(set) var latestBackPixelBuffer:  CVPixelBuffer?
     private(set) var latestFrontPixelBuffer: CVPixelBuffer?
@@ -47,9 +49,9 @@ class VideoRecorder {
         guard state == .idle else { throw RecorderError.alreadyRecording }
 
         let timestamp = DateFormatter.fileTimestamp.string(from: Date())
-        compositeWriter = saveComposite ? try AVAssetWriter(url: makeOutputURL(suffix: "composite_\(timestamp)"), fileType: .mp4) : nil
-        backWriter      = saveBack      ? try AVAssetWriter(url: makeOutputURL(suffix: "back_\(timestamp)"),      fileType: .mp4) : nil
-        frontWriter     = saveFront     ? try AVAssetWriter(url: makeOutputURL(suffix: "front_\(timestamp)"),     fileType: .mp4) : nil
+        compositeWriter = saveComposite ? try AVAssetWriter(url: makeOutputURL(suffix: "\(timestamp)-merged"), fileType: .mp4) : nil
+        backWriter      = saveBack      ? try AVAssetWriter(url: makeOutputURL(suffix: "\(timestamp)-back"),   fileType: .mp4) : nil
+        frontWriter     = saveFront     ? try AVAssetWriter(url: makeOutputURL(suffix: "\(timestamp)-front"),  fileType: .mp4) : nil
 
         writersInitialized = false
         backDimensions     = nil
@@ -185,6 +187,8 @@ class VideoRecorder {
 
     func updatePiPOrigin(normalizedX: Float, normalizedY: Float) {
         writeQueue.async { [weak self] in
+            self?.storedPiPOriginX = normalizedX
+            self?.storedPiPOriginY = normalizedY
             self?.compositor?.updateOrigin(normalizedX: normalizedX, normalizedY: normalizedY)
         }
     }
@@ -224,6 +228,9 @@ class VideoRecorder {
 
         compositor?.configure(backWidth: back.width, backHeight: back.height,
                               frontWidth: front.width, frontHeight: front.height)
+        if let x = storedPiPOriginX, let y = storedPiPOriginY {
+            compositor?.updateOrigin(normalizedX: x, normalizedY: y)
+        }
 
         if let w = compositeWriter {
             compositeVideoInput = makeVideoInput(settings: videoSettings(width: back.width, height: back.height))
@@ -391,7 +398,7 @@ enum RecorderError: LocalizedError {
 private extension DateFormatter {
     static let fileTimestamp: DateFormatter = {
         let f = DateFormatter()
-        f.dateFormat = "yyyyMMdd_HHmmss"
+        f.dateFormat = "yyyyMMddHHmmss"
         return f
     }()
 }

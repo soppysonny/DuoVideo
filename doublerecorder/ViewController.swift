@@ -1037,9 +1037,7 @@ class ViewController: UIViewController {
             ? UIColor(red: 1, green: 0.231, blue: 0.188, alpha: 1)
             : UIColor.white.withAlphaComponent(0.62)
 
-        // Island pill timer (cs simulated at 0)
-        let cs = (Int(Date().timeIntervalSince1970 * 100)) % 100
-        islandTimeLabel.text = String(format: "%02d:%02d.%02d", m, s, cs)
+        islandTimeLabel.text = String(format: "%02d:%02d", m, s)
         islandTimeLabel.sizeToFit()
         islandTimeLabel.center = CGPoint(x: islandPillView.bounds.midX, y: islandPillView.bounds.midY)
     }
