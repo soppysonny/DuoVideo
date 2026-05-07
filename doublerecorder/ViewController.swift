@@ -11,7 +11,7 @@ class ViewController: UIViewController {
 
     private var isFlashOn    = false
     private var isMicMuted   = false
-    private var isFrontMirror = true
+    private var isFrontMirror: Bool { AppSettings.shared.recordMirrored }
     private var isGridOn     = false
     private var isAELocked   = false
     private var isSwapped    = false
@@ -126,7 +126,7 @@ class ViewController: UIViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         cameraManager?.startRunning()
-        cameraManager?.setFrontRecordingMirror(AppSettings.shared.recordMirrored)
+        applyMirrorState()
         syncOrientationIfNeeded()
         refreshGalleryBadge()
         syncHUDLabels()
@@ -399,8 +399,8 @@ class ViewController: UIViewController {
             sideToolbarBlur.contentView.addSubview(btn)
         }
 
-        // Initial active states
-        mirrorBtn.isActive = isFrontMirror
+        // Initial active state driven by AppSettings
+        mirrorBtn.isActive = AppSettings.shared.recordMirrored
     }
 
     // MARK: - Bottom Dock Setup
@@ -892,8 +892,7 @@ class ViewController: UIViewController {
                 if let bl = mgr.backPreviewLayer  { self.backPreviewView.attachPreviewLayer(bl) }
                 if let fl = mgr.frontPreviewLayer { self.frontPreviewView.attachPreviewLayer(fl) }
                 mgr.startRunning()
-                mgr.setFrontMirror(self.isFrontMirror)
-                mgr.setFrontRecordingMirror(AppSettings.shared.recordMirrored)
+                self.applyMirrorState()
                 self.syncOrientationIfNeeded()
             case .failure(let err):
                 self.showAlert(title: "摄像头初始化失败", message: err.localizedDescription)
@@ -1115,12 +1114,8 @@ class ViewController: UIViewController {
     }
 
     @objc private func handleMirror() {
-        isFrontMirror.toggle()
-        mirrorBtn.isActive = isFrontMirror
-        cameraManager?.setFrontMirror(isFrontMirror)
-        if let lbl = pipBottomView.viewWithTag(1001) as? UILabel {
-            lbl.text = isFrontMirror ? "MIRROR" : "NORMAL"
-        }
+        AppSettings.shared.recordMirrored = !isFrontMirror
+        applyMirrorState()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
@@ -1181,7 +1176,17 @@ class ViewController: UIViewController {
     }
 
     @objc private func recordMirrorChanged() {
-        cameraManager?.setFrontRecordingMirror(AppSettings.shared.recordMirrored)
+        applyMirrorState()
+    }
+
+    private func applyMirrorState() {
+        let m = isFrontMirror
+        mirrorBtn.isActive = m
+        cameraManager?.setFrontMirror(m)
+        cameraManager?.setFrontRecordingMirror(m)
+        if let lbl = pipBottomView.viewWithTag(1001) as? UILabel {
+            lbl.text = m ? "MIRROR" : "NORMAL"
+        }
     }
 
     @objc private func handleGallery() {
