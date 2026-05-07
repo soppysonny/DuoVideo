@@ -1255,6 +1255,7 @@ class ViewController: UIViewController {
     }
 
     @objc private func handleGallery() {
+        cameraManager?.stopRunning()
         let vc = RecordingsListViewController()
         present(vc, animated: true)
     }
