@@ -942,7 +942,7 @@ class ViewController: UIViewController {
             takePhoto()
             return
         }
-        if videoRecorder.state == .recording {
+        if videoRecorder.state == .recording || videoRecorder.state == .waitingForDimensions {
             stopRecording()
         } else if videoRecorder.state == .idle {
             startRecording()

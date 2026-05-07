@@ -221,7 +221,8 @@ class VideoRecorder {
     private func tryInitializeWriters() {
         guard !writersInitialized,
               let back  = backDimensions,
-              let front = frontDimensions
+              let front = frontDimensions,
+              state == .waitingForDimensions
         else { return }
 
         guard compositeWriter != nil || backWriter != nil || frontWriter != nil else { return }
