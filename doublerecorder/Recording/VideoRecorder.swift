@@ -207,43 +207,57 @@ class VideoRecorder {
         }
     }
 
-    private func applyScreenLayout(overrideBackW: Int? = nil, overrideBackH: Int? = nil) {
+    private func applyScreenLayout(overrideBackW: Int? = nil, overrideBackH: Int? = nil,
+                                    overrideFrontW: Int? = nil, overrideFrontH: Int? = nil) {
         guard let comp = compositor else { return }
         guard let sW = storedScreenW, let sH = storedScreenH, sW > 0, sH > 0 else { return }
         guard let ox = storedScreenOriginX, let oy = storedScreenOriginY else { return }
-        guard let pw = storedScreenPipW, let ph = storedScreenPipH else { return }
+        guard let pw = storedScreenPipW else { return }
 
-        let rawBW = overrideBackW ?? backDimensions?.width
-        let rawBH = overrideBackH ?? backDimensions?.height
+        let rawBW = overrideBackW  ?? backDimensions?.width
+        let rawBH = overrideBackH  ?? backDimensions?.height
+        let rawFW = overrideFrontW ?? frontDimensions?.width
+        let rawFH = overrideFrontH ?? frontDimensions?.height
 
         if let bW = rawBW.map(Float.init), let bH = rawBH.map(Float.init), bW > 0, bH > 0 {
-            // 预览使用 resizeAspectFill：确定是按宽还是按高缩放及裁切偏移
+            // 预览使用 resizeAspectFill：确定缩放比例和裁切偏移
             let videoAspect  = bW / bH
             let screenAspect = sW / sH
             let scale: Float
             let cropX: Float
             let cropY: Float
             if videoAspect > screenAspect {
-                // 按高缩放，左右裁切
                 scale = sH / bH
                 cropX = (bW * scale - sW) / 2
                 cropY = 0
             } else {
-                // 按宽缩放，上下裁切
                 scale = sW / bW
                 cropX = 0
                 cropY = (bH * scale - sH) / 2
             }
-            comp.params.pipOriginX = (ox + cropX) / (scale * bW)
-            comp.params.pipOriginY = (oy + cropY) / (scale * bH)
-            comp.params.pipWidth   = pw / (scale * bW)
-            comp.params.pipHeight  = ph / (scale * bH)
+
+            let normOriginX = (ox + cropX) / (scale * bW)
+            let normOriginY = (oy + cropY) / (scale * bH)
+
+            // 宽度由屏幕 PiP 宽精确映射；高度按前后摄宽高比推算，保证前摄内容无失真
+            let normW = pw / (scale * bW)
+            let fW = rawFW.map(Float.init) ?? bW
+            let fH = rawFH.map(Float.init) ?? bH
+            let normH = normW * bH * fW / (bW * fH)
+
+            // 防止 PiP 超出视频帧边界
+            comp.params.pipOriginX = min(max(normOriginX, 0), max(1.0 - normW, 0))
+            comp.params.pipOriginY = min(max(normOriginY, 0), max(1.0 - normH, 0))
+            comp.params.pipWidth   = normW
+            comp.params.pipHeight  = normH
         } else {
-            // 帧尺寸未知时回退：Y 轴按高填充时天然正确
-            comp.params.pipOriginX = ox / sW
-            comp.params.pipOriginY = oy / sH
-            comp.params.pipWidth   = pw / sW
-            comp.params.pipHeight  = ph / sH
+            // 帧尺寸未知时回退：使用屏幕归一化值（Y 轴按高填充时与视频坐标一致）
+            let normW = pw / sW
+            let normH = normW  // 无帧尺寸时假设前后摄宽高比相同
+            comp.params.pipOriginX = min(max(ox / sW, 0), max(1.0 - normW, 0))
+            comp.params.pipOriginY = min(max(oy / sH, 0), max(1.0 - normH, 0))
+            comp.params.pipWidth   = normW
+            comp.params.pipHeight  = normH
         }
     }
 
@@ -262,10 +276,11 @@ class VideoRecorder {
             if !self.writersInitialized {
                 let bW = CVPixelBufferGetWidth(back)
                 let bH = CVPixelBufferGetHeight(back)
-                comp.configure(backWidth: bW, backHeight: bH,
-                               frontWidth:  CVPixelBufferGetWidth(front),
-                               frontHeight: CVPixelBufferGetHeight(front))
-                self.applyScreenLayout(overrideBackW: bW, overrideBackH: bH)
+                let fW = CVPixelBufferGetWidth(front)
+                let fH = CVPixelBufferGetHeight(front)
+                comp.configure(backWidth: bW, backHeight: bH, frontWidth: fW, frontHeight: fH)
+                self.applyScreenLayout(overrideBackW: bW, overrideBackH: bH,
+                                       overrideFrontW: fW, overrideFrontH: fH)
             }
             let result = comp.composite(backBuffer: back, frontBuffer: front)
             DispatchQueue.main.async { completion(result) }
