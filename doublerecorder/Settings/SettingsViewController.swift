@@ -143,6 +143,7 @@ class SettingsViewController: UIViewController {
         let resOptions: [(String, String, AppSettings.VideoResolution)] = [
             ("720P",  "HD · 1280×720",   .hd720),
             ("1080P", "FHD · 1920×1080", .hd1080),
+            ("4K",    "UHD · 3840×2160", .uhd4k),
         ]
         for opt in resOptions {
             let tile = OptionTile(title: opt.0, subtitle: opt.1)
@@ -223,7 +224,7 @@ class SettingsViewController: UIViewController {
     }
 
     private func syncResTiles() {
-        let order: [AppSettings.VideoResolution] = [.hd720, .hd1080]
+        let order: [AppSettings.VideoResolution] = [.hd720, .hd1080, .uhd4k]
         for (tile, val) in zip(resTiles, order) { tile.isSelected = val == settings.videoResolution }
     }
 

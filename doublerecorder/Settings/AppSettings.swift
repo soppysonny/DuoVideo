@@ -34,9 +34,16 @@ final class AppSettings {
     enum VideoResolution: String {
         case hd720  = "720p"
         case hd1080 = "1080p"
+        case uhd4k  = "4K"
 
         var hudLabel: String { rawValue.uppercased() }
-        var targetWidth: Int { self == .hd720 ? 1280 : 1920 }
+        var targetWidth: Int {
+            switch self {
+            case .hd720:  return 1280
+            case .hd1080: return 1920
+            case .uhd4k:  return 3840
+            }
+        }
     }
 
     var videoResolution: VideoResolution {
