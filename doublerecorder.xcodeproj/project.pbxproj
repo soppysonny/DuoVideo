@@ -6,6 +6,9 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		6BD050642FA883D500AECBF5 /* doublerecorder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = doublerecorder.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -77,8 +80,6 @@
 				6BD050662FA883D500AECBF5 /* doublerecorder */,
 			);
 			name = doublerecorder;
-			packageProductDependencies = (
-			);
 			productName = doublerecorder;
 			productReference = 6BD050642FA883D500AECBF5 /* doublerecorder.app */;
 			productType = "com.apple.product-type.application";
@@ -144,20 +145,23 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2025050601;
 				DEVELOPMENT_TEAM = 7KHS4R8V39;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = doublerecorder/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Duo Video";
+				INFOPLIST_KEY_NSCameraUsageDescription = "需要访问前后摄像头进行双摄同步录像";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要访问麦克风以录制视频的音频轨道";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "需要将录制的视频保存到您的相册";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mbjztech.doublerecorder;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -175,20 +179,23 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2025050601;
 				DEVELOPMENT_TEAM = 7KHS4R8V39;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = doublerecorder/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Duo Video";
+				INFOPLIST_KEY_NSCameraUsageDescription = "需要访问前后摄像头进行双摄同步录像";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要访问麦克风以录制视频的音频轨道";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "需要将录制的视频保存到您的相册";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.mbjztech.doublerecorder;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
