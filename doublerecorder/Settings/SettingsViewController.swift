@@ -149,22 +149,13 @@ class SettingsViewController: UIViewController {
             let res  = opt.2
             tile.onTap = { [weak self] in
                 self?.settings.videoResolution = res
-                // 1080p 不支持 60fps 双摄，自动降到 30fps
-                if res == .hd1080 && self?.settings.frameRate == .fps60 {
-                    self?.settings.frameRate = .fps30
-                    self?.syncFpsTiles()
-                }
                 self?.syncResTiles()
             }
             resTiles.append(tile)
             resRow.addArrangedSubview(tile)
         }
         vStack.addArrangedSubview(resRow)
-        vStack.setCustomSpacing(8, after: resRow)
-
-        let resCaption = sectionLabel("双摄模式下 1080P 最高支持 30fps")
-        vStack.addArrangedSubview(resCaption)
-        vStack.setCustomSpacing(32, after: resCaption)
+        vStack.setCustomSpacing(32, after: resRow)
 
         // ── 帧率 ──────────────────────────────────────────────
         vStack.addArrangedSubview(sectionLabel("帧率"))
@@ -181,21 +172,12 @@ class SettingsViewController: UIViewController {
             let rate = opt.2
             tile.onTap = { [weak self] in
                 self?.settings.frameRate = rate
-                // 60fps 不支持 1080p 双摄，自动降到 720p
-                if rate == .fps60 && self?.settings.videoResolution == .hd1080 {
-                    self?.settings.videoResolution = .hd720
-                    self?.syncResTiles()
-                }
                 self?.syncFpsTiles()
             }
             fpsTiles.append(tile)
             fpsRow.addArrangedSubview(tile)
         }
         vStack.addArrangedSubview(fpsRow)
-        vStack.setCustomSpacing(8, after: fpsRow)
-
-        let fpsCaption = sectionLabel("60fps 仅支持 720P")
-        vStack.addArrangedSubview(fpsCaption)
     }
 
     private func sectionLabel(_ text: String) -> UILabel {

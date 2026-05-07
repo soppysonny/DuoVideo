@@ -154,20 +154,22 @@ class CameraManager: NSObject {
     private func applyFormatSettings() {
         let res = AppSettings.shared.videoResolution
         let fps = AppSettings.shared.frameRate.rawValue
-        // MultiCam 1080p 硬件预算不足以支持双路 60fps，上限 30fps
-        let effectiveFps = (res == .hd1080 && fps > 30) ? 30 : fps
         for device in [backDevice, frontDevice].compactMap({ $0 }) {
-            applyFormat(targetWidth: res.targetWidth, fps: effectiveFps, to: device)
+            applyFormat(targetWidth: res.targetWidth, fps: fps, to: device)
         }
     }
 
     private func applyFormat(targetWidth: Int, fps: Int, to device: AVCaptureDevice) {
+        let pos = device.position == .back ? "back" : "front"
         let multiCamFormats = device.formats.filter { fmt in
             guard fmt.isMultiCamSupported else { return false }
             let dims = CMVideoFormatDescriptionGetDimensions(fmt.formatDescription)
             return dims.width == targetWidth
         }
-        guard !multiCamFormats.isEmpty else { return }
+        guard !multiCamFormats.isEmpty else {
+            print("[MultiCam] \(pos): no MultiCam format at width=\(targetWidth), skipped")
+            return
+        }
 
         // 优先找支持目标帧率的格式，否则退而使用同分辨率下帧率最高的格式
         let exact = multiCamFormats.first {
@@ -181,6 +183,8 @@ class CameraManager: NSObject {
         // 实际帧率不超过所选格式的上限，避免设置非法帧率
         let maxFps = format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? Double(fps)
         let actualFps = min(Double(fps), maxFps)
+        let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+        print("[MultiCam] \(pos): requested \(targetWidth)×?@\(fps)fps → actual \(dims.width)×\(dims.height)@\(Int(actualFps))fps (exact=\(exact != nil))")
 
         try? device.lockForConfiguration()
         device.activeFormat = format
