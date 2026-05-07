@@ -72,6 +72,7 @@ class CameraManager: NSObject {
             self.applyFormatSettings()
             self.session.commitConfiguration()
             self.session.startRunning()
+            print("[MultiCam] hardwareCost=\(self.session.hardwareCost) systemPressureCost=\(self.session.systemPressureCost)")
         }
     }
 
