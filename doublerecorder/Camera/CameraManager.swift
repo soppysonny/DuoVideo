@@ -159,16 +159,29 @@ class CameraManager: NSObject {
     }
 
     private func applyFormat(targetWidth: Int, fps: Int, to device: AVCaptureDevice) {
-        let candidates = device.formats.filter { fmt in
+        let multiCamFormats = device.formats.filter { fmt in
             guard fmt.isMultiCamSupported else { return false }
             let dims = CMVideoFormatDescriptionGetDimensions(fmt.formatDescription)
-            guard dims.width == targetWidth else { return false }
-            return fmt.videoSupportedFrameRateRanges.contains { $0.maxFrameRate >= Float64(fps) }
+            return dims.width == targetWidth
         }
-        guard let format = candidates.first else { return }
+        guard !multiCamFormats.isEmpty else { return }
+
+        // 优先找支持目标帧率的格式，否则退而使用同分辨率下帧率最高的格式
+        let exact = multiCamFormats.first {
+            $0.videoSupportedFrameRateRanges.contains { $0.maxFrameRate >= Float64(fps) }
+        }
+        let format = exact ?? multiCamFormats.max(by: {
+            ($0.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0) <
+            ($1.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0)
+        })!
+
+        // 实际帧率不超过所选格式的上限，避免设置非法帧率
+        let maxFps = format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? Double(fps)
+        let actualFps = min(Double(fps), maxFps)
+
         try? device.lockForConfiguration()
         device.activeFormat = format
-        let dur = CMTime(value: 1, timescale: CMTimeScale(fps))
+        let dur = CMTime(value: 1, timescale: CMTimeScale(actualFps))
         device.activeVideoMinFrameDuration = dur
         device.activeVideoMaxFrameDuration = dur
         device.unlockForConfiguration()
