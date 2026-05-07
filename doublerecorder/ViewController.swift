@@ -906,6 +906,9 @@ class ViewController: UIViewController {
                     guard let self else { return }
                     self.applyLayout(for: self.view.bounds.size)
                 }
+                mgr.onQualityReduced = { [weak self] message in
+                    self?.showToast(message)
+                }
             case .failure(let err):
                 self.showAlert(title: "摄像头初始化失败", message: err.localizedDescription)
             }
@@ -1326,6 +1329,43 @@ class ViewController: UIViewController {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "好", style: .default))
         present(alert, animated: true)
+    }
+
+    func showToast(_ message: String) {
+        let container = UIView()
+        container.backgroundColor = UIColor(white: 0.08, alpha: 0.92)
+        container.layer.cornerRadius = 10
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        let label = UILabel()
+        label.text = message
+        label.font = UIFont.monospacedSystemFont(ofSize: 12, weight: .medium)
+        label.textColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 1)
+        label.numberOfLines = 0
+        label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(label)
+
+        view.addSubview(container)
+        NSLayoutConstraint.activate([
+            label.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
+            label.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10),
+            label.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+            label.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -16),
+            container.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            container.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -160),
+            container.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 32),
+            container.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -32),
+        ])
+
+        container.alpha = 0
+        UIView.animate(withDuration: 0.25) { container.alpha = 1 } completion: { _ in
+            UIView.animate(withDuration: 0.3, delay: 2.5, options: []) {
+                container.alpha = 0
+            } completion: { _ in
+                container.removeFromSuperview()
+            }
+        }
     }
 }
 

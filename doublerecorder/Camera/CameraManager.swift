@@ -15,6 +15,9 @@ class CameraManager: NSObject {
 
     weak var delegate: CameraManagerDelegate?
 
+    /// hardwareCost > 1.0 时在主线程回调，通知已自动降级，参数为提示文字
+    var onQualityReduced: ((String) -> Void)?
+
     private(set) var backPreviewLayer: AVCaptureVideoPreviewLayer?
     private(set) var frontPreviewLayer: AVCaptureVideoPreviewLayer?
 
@@ -72,7 +75,7 @@ class CameraManager: NSObject {
             self.applyFormatSettings()
             self.session.commitConfiguration()
             self.session.startRunning()
-            print("[MultiCam] hardwareCost=\(self.session.hardwareCost) systemPressureCost=\(self.session.systemPressureCost)")
+            self.checkAndReduceQualityIfNeeded()
         }
     }
 
@@ -156,6 +159,29 @@ class CameraManager: NSObject {
         let fps = AppSettings.shared.frameRate.rawValue
         for device in [backDevice, frontDevice].compactMap({ $0 }) {
             applyFormat(targetWidth: res.targetWidth, fps: fps, to: device)
+        }
+    }
+
+    /// session 启动后检测 hardwareCost，超限则自动降帧率并通知上层
+    private func checkAndReduceQualityIfNeeded() {
+        guard session.hardwareCost > 1.0 else { return }
+        let res = AppSettings.shared.videoResolution
+        // 降帧率：60→30，30→24，24 无法再降则跳过
+        let currentFps = AppSettings.shared.frameRate.rawValue
+        let fallbackFps: Int
+        switch currentFps {
+        case 60: fallbackFps = 30
+        case 30: fallbackFps = 24
+        default: return
+        }
+        session.beginConfiguration()
+        for device in [backDevice, frontDevice].compactMap({ $0 }) {
+            applyFormat(targetWidth: res.targetWidth, fps: fallbackFps, to: device)
+        }
+        session.commitConfiguration()
+        let msg = "当前设置超出硬件限制，帧率已自动降至 \(fallbackFps)fps"
+        DispatchQueue.main.async { [weak self] in
+            self?.onQualityReduced?(msg)
         }
     }
 
