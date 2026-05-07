@@ -54,10 +54,7 @@ class ViewController: UIViewController {
     // MARK: - Top HUD
 
     private let topHUDView    = UIView()
-    private let topLeftPill   = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
     private let topRightPill  = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
-    private let clipLabel     = UILabel()
-    private let topTimerLabel = UILabel()
     private let resLabel      = UILabel()
     private let fpsLabel      = UILabel()
     private let codecLabel    = UILabel()
@@ -311,32 +308,11 @@ class ViewController: UIViewController {
         topHUDView.isUserInteractionEnabled = false
         view.addSubview(topHUDView)
 
-        func pill(blur: UIVisualEffectView) {
-            blur.layer.cornerRadius = 6
-            blur.layer.masksToBounds = true
-            blur.layer.borderWidth = 0.5
-            blur.layer.borderColor = UIColor.white.withAlphaComponent(0.10).cgColor
-            topHUDView.addSubview(blur)
-        }
-        pill(blur: topLeftPill)
-        pill(blur: topRightPill)
-
-        clipLabel.text = "CLIP·001"
-        clipLabel.font = UIFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
-        clipLabel.textColor = UIColor.white.withAlphaComponent(0.38)
-        topLeftPill.contentView.addSubview(clipLabel)
-
-        // vertical separator
-        let sep = UIView()
-        sep.backgroundColor = UIColor.white.withAlphaComponent(0.10)
-        sep.tag = 801
-        topLeftPill.contentView.addSubview(sep)
-
-        topTimerLabel.text = "00:00"
-        topTimerLabel.font = UIFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
-        topTimerLabel.textColor = UIColor.white.withAlphaComponent(0.62)
-        topTimerLabel.tag = 802
-        topLeftPill.contentView.addSubview(topTimerLabel)
+        topRightPill.layer.cornerRadius = 6
+        topRightPill.layer.masksToBounds = true
+        topRightPill.layer.borderWidth = 0.5
+        topRightPill.layer.borderColor = UIColor.white.withAlphaComponent(0.10).cgColor
+        topHUDView.addSubview(topRightPill)
 
         resLabel.text = AppSettings.shared.videoResolution.hudLabel
         resLabel.font = UIFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
@@ -545,18 +521,6 @@ class ViewController: UIViewController {
         let pillH: CGFloat = 30
 
         topHUDView.frame = CGRect(x: hPad, y: topY, width: size.width - hPad * 2, height: pillH)
-
-        // Layout left pill
-        clipLabel.sizeToFit()
-        topTimerLabel.sizeToFit()
-        let leftW = clipLabel.frame.width + 1 + topTimerLabel.frame.width + 28
-        topLeftPill.frame = CGRect(x: 0, y: 0, width: leftW, height: pillH)
-
-        clipLabel.frame = CGRect(x: 10, y: (pillH - 12) / 2, width: clipLabel.frame.width, height: 12)
-        let sep = topLeftPill.contentView.viewWithTag(801)!
-        sep.frame = CGRect(x: clipLabel.frame.maxX + 8, y: 8, width: 0.5, height: pillH - 16)
-        topTimerLabel.frame = CGRect(x: sep.frame.maxX + 8, y: (pillH - 14) / 2,
-                                     width: topTimerLabel.frame.width, height: 14)
 
         // Layout right pill
         resLabel.sizeToFit(); fpsLabel.sizeToFit(); codecLabel.sizeToFit()
@@ -1037,12 +1001,6 @@ class ViewController: UIViewController {
     private func updateTimerLabels() {
         let m = recordingSeconds / 60
         let s = recordingSeconds % 60
-        let text = String(format: "%02d:%02d", m, s)
-        topTimerLabel.text = text
-        topTimerLabel.textColor = videoRecorder.state == .recording
-            ? UIColor(red: 1, green: 0.231, blue: 0.188, alpha: 1)
-            : UIColor.white.withAlphaComponent(0.62)
-
         islandTimeLabel.text = String(format: "%02d:%02d", m, s)
         islandTimeLabel.sizeToFit()
         islandTimeLabel.center = CGPoint(x: islandPillView.bounds.midX, y: islandPillView.bounds.midY)
