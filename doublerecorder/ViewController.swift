@@ -675,17 +675,18 @@ class ViewController: UIViewController {
     private func layoutPiP(size: CGSize, isLandscape: Bool, safe: UIEdgeInsets, shorter: CGFloat) {
         guard !pipIsDragging else { return }
 
-        // rawAspect = 像素缓冲的原始宽高比（竖拍摄像头约 9/16，始终 < 1）。
-        // 横屏时小窗旋转为横向：以 shorter*0.30 为高，宽按倒数推算，保持与竖屏相同的物理尺寸。
+        // pipFrameAspect 随 videoOrientation 变化（竖屏=9/16，横屏=16/9）。
+        // 取 min(r, 1/r) 将其标准化为竖屏基准比（始终 ≤ 1），使公式不依赖缓冲区旋转方向。
         let rawAspect = videoRecorder.pipFrameAspect ?? (9.0 / 16.0)
+        let portraitAspect = min(rawAspect, 1.0 / rawAspect)
         let pipW: CGFloat
         let pipH: CGFloat
         if isLandscape {
             pipH = shorter * 0.30
-            pipW = pipH / rawAspect
+            pipW = pipH / portraitAspect
         } else {
             pipW = shorter * 0.30
-            pipH = pipW / rawAspect
+            pipH = pipW / portraitAspect
         }
         pipContainerView.bounds = CGRect(x: 0, y: 0, width: pipW, height: pipH)
         frontPreviewView.frame = pipContainerView.bounds
