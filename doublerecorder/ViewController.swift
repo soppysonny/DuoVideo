@@ -679,9 +679,11 @@ class ViewController: UIViewController {
             )
             pipContainerView.frame.origin = clamped
             pipFreeOrigin = clamped
-            let normX = Float(clamped.x / size.width)
-            let normY = Float(clamped.y / size.height)
-            videoRecorder.updatePiPOrigin(normalizedX: normX, normalizedY: normY)
+            videoRecorder.updatePiPLayout(
+                screenOriginX: Float(clamped.x), screenOriginY: Float(clamped.y),
+                screenPipW: Float(pipW), screenPipH: Float(pipH),
+                screenW: Float(size.width), screenH: Float(size.height)
+            )
         } else {
             snapPiP(to: pipCorner, size: size, pipSize: CGSize(width: pipW, height: pipH),
                     margins: margins, animated: false)
@@ -769,10 +771,11 @@ class ViewController: UIViewController {
 
         let origin = pipPosition(for: corner, size: s, pipSize: ps, margins: m)
 
-        // 同步合成视频里的 PiP 叠层位置（归一化坐标）
-        let normX = Float(origin.x / s.width)
-        let normY = Float(origin.y / s.height)
-        videoRecorder.updatePiPOrigin(normalizedX: normX, normalizedY: normY)
+        videoRecorder.updatePiPLayout(
+            screenOriginX: Float(origin.x), screenOriginY: Float(origin.y),
+            screenPipW: Float(ps.width), screenPipH: Float(ps.height),
+            screenW: Float(s.width), screenH: Float(s.height)
+        )
 
         if animated {
             UIView.animate(withDuration: 0.22, delay: 0,
@@ -859,9 +862,12 @@ class ViewController: UIViewController {
             pipFreeOrigin = pipContainerView.frame.origin
             updateWatermarkPosition()
             let origin = pipContainerView.frame.origin
-            let normX = Float(origin.x / view.bounds.width)
-            let normY = Float(origin.y / view.bounds.height)
-            videoRecorder.updatePiPOrigin(normalizedX: normX, normalizedY: normY)
+            let pipSz  = pipContainerView.bounds.size
+            videoRecorder.updatePiPLayout(
+                screenOriginX: Float(origin.x), screenOriginY: Float(origin.y),
+                screenPipW: Float(pipSz.width), screenPipH: Float(pipSz.height),
+                screenW: Float(view.bounds.width), screenH: Float(view.bounds.height)
+            )
             applyOverlapFade()
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         default: break

@@ -26,8 +26,13 @@ class VideoRecorder {
     var isMicMuted = false
 
     private let compositor = PiPCompositor()
-    private var storedPiPOriginX: Float?
-    private var storedPiPOriginY: Float?
+    // Screen-space PiP layout info (set by ViewController, mapped to video coords when frame size is known)
+    private var storedScreenOriginX: Float?
+    private var storedScreenOriginY: Float?
+    private var storedScreenPipW: Float?
+    private var storedScreenPipH: Float?
+    private var storedScreenW: Float?
+    private var storedScreenH: Float?
 
     private(set) var latestBackPixelBuffer:  CVPixelBuffer?
     private(set) var latestFrontPixelBuffer: CVPixelBuffer?
@@ -185,11 +190,60 @@ class VideoRecorder {
         }
     }
 
-    func updatePiPOrigin(normalizedX: Float, normalizedY: Float) {
+    /// 用屏幕坐标同步 PiP 位置。VideoRecorder 会根据 back 帧尺寸和 resizeAspectFill 几何关系
+    /// 将屏幕坐标映射到视频归一化坐标，避免宽高比差异导致录像 PiP 被截断。
+    func updatePiPLayout(screenOriginX: Float, screenOriginY: Float,
+                         screenPipW: Float, screenPipH: Float,
+                         screenW: Float, screenH: Float) {
         writeQueue.async { [weak self] in
-            self?.storedPiPOriginX = normalizedX
-            self?.storedPiPOriginY = normalizedY
-            self?.compositor?.updateOrigin(normalizedX: normalizedX, normalizedY: normalizedY)
+            guard let self else { return }
+            self.storedScreenOriginX = screenOriginX
+            self.storedScreenOriginY = screenOriginY
+            self.storedScreenPipW    = screenPipW
+            self.storedScreenPipH    = screenPipH
+            self.storedScreenW       = screenW
+            self.storedScreenH       = screenH
+            self.applyScreenLayout()
+        }
+    }
+
+    private func applyScreenLayout(overrideBackW: Int? = nil, overrideBackH: Int? = nil) {
+        guard let comp = compositor else { return }
+        guard let sW = storedScreenW, let sH = storedScreenH, sW > 0, sH > 0 else { return }
+        guard let ox = storedScreenOriginX, let oy = storedScreenOriginY else { return }
+        guard let pw = storedScreenPipW, let ph = storedScreenPipH else { return }
+
+        let rawBW = overrideBackW ?? backDimensions?.width
+        let rawBH = overrideBackH ?? backDimensions?.height
+
+        if let bW = rawBW.map(Float.init), let bH = rawBH.map(Float.init), bW > 0, bH > 0 {
+            // 预览使用 resizeAspectFill：确定是按宽还是按高缩放及裁切偏移
+            let videoAspect  = bW / bH
+            let screenAspect = sW / sH
+            let scale: Float
+            let cropX: Float
+            let cropY: Float
+            if videoAspect > screenAspect {
+                // 按高缩放，左右裁切
+                scale = sH / bH
+                cropX = (bW * scale - sW) / 2
+                cropY = 0
+            } else {
+                // 按宽缩放，上下裁切
+                scale = sW / bW
+                cropX = 0
+                cropY = (bH * scale - sH) / 2
+            }
+            comp.params.pipOriginX = (ox + cropX) / (scale * bW)
+            comp.params.pipOriginY = (oy + cropY) / (scale * bH)
+            comp.params.pipWidth   = pw / (scale * bW)
+            comp.params.pipHeight  = ph / (scale * bH)
+        } else {
+            // 帧尺寸未知时回退：Y 轴按高填充时天然正确
+            comp.params.pipOriginX = ox / sW
+            comp.params.pipOriginY = oy / sH
+            comp.params.pipWidth   = pw / sW
+            comp.params.pipHeight  = ph / sH
         }
     }
 
@@ -206,10 +260,12 @@ class VideoRecorder {
             }
             // 录制前拍照时 compositor 尚未被 tryInitializeWriters 配置，在此按需配置
             if !self.writersInitialized {
-                comp.configure(backWidth:  CVPixelBufferGetWidth(back),
-                               backHeight: CVPixelBufferGetHeight(back),
+                let bW = CVPixelBufferGetWidth(back)
+                let bH = CVPixelBufferGetHeight(back)
+                comp.configure(backWidth: bW, backHeight: bH,
                                frontWidth:  CVPixelBufferGetWidth(front),
                                frontHeight: CVPixelBufferGetHeight(front))
+                self.applyScreenLayout(overrideBackW: bW, overrideBackH: bH)
             }
             let result = comp.composite(backBuffer: back, frontBuffer: front)
             DispatchQueue.main.async { completion(result) }
@@ -229,9 +285,7 @@ class VideoRecorder {
 
         compositor?.configure(backWidth: back.width, backHeight: back.height,
                               frontWidth: front.width, frontHeight: front.height)
-        if let x = storedPiPOriginX, let y = storedPiPOriginY {
-            compositor?.updateOrigin(normalizedX: x, normalizedY: y)
-        }
+        applyScreenLayout()  // 用屏幕坐标精确覆盖 configure 产生的默认 PiP 参数
 
         if let w = compositeWriter {
             compositeVideoInput = makeVideoInput(settings: videoSettings(width: back.width, height: back.height))
