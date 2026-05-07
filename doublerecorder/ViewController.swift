@@ -907,7 +907,7 @@ class ViewController: UIViewController {
                     self.applyLayout(for: self.view.bounds.size)
                 }
                 mgr.onQualityReduced = { [weak self] message in
-                    self?.showToast(message)
+                    self?.showAlert(title: "画质已自动调整", message: message)
                 }
             case .failure(let err):
                 self.showAlert(title: "摄像头初始化失败", message: err.localizedDescription)

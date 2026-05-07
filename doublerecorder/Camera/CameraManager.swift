@@ -15,8 +15,9 @@ class CameraManager: NSObject {
 
     weak var delegate: CameraManagerDelegate?
 
-    /// hardwareCost > 1.0 时在主线程回调，通知已自动降级，参数为提示文字
+    /// 格式应用或 hardwareCost 超限导致降级时，在主线程回调一次，参数为提示文字
     var onQualityReduced: ((String) -> Void)?
+    private var pendingQualityMessage: String?
 
     private(set) var backPreviewLayer: AVCaptureVideoPreviewLayer?
     private(set) var frontPreviewLayer: AVCaptureVideoPreviewLayer?
@@ -71,11 +72,16 @@ class CameraManager: NSObject {
     func startRunning() {
         sessionQueue.async { [weak self] in
             guard let self, !self.session.isRunning else { return }
+            self.pendingQualityMessage = nil
             self.session.beginConfiguration()
             self.applyFormatSettings()
             self.session.commitConfiguration()
             self.session.startRunning()
             self.checkAndReduceQualityIfNeeded()
+            if let msg = self.pendingQualityMessage {
+                self.pendingQualityMessage = nil
+                DispatchQueue.main.async { [weak self] in self?.onQualityReduced?(msg) }
+            }
         }
     }
 
@@ -157,8 +163,16 @@ class CameraManager: NSObject {
     private func applyFormatSettings() {
         let res = AppSettings.shared.videoResolution
         let fps = AppSettings.shared.frameRate.rawValue
+        var lines: [String] = []
         for device in [backDevice, frontDevice].compactMap({ $0 }) {
-            applyFormat(targetWidth: res.targetWidth, fps: fps, to: device)
+            let actual = applyFormat(targetWidth: res.targetWidth, fps: fps, to: device)
+            if actual < fps {
+                let name = device.position == .back ? "后摄" : "前摄"
+                lines.append("\(name)：\(fps)fps → \(actual)fps")
+            }
+        }
+        if !lines.isEmpty {
+            pendingQualityMessage = "当前设置不完全受支持，已自动调整：\n" + lines.joined(separator: "\n")
         }
     }
 
@@ -166,7 +180,6 @@ class CameraManager: NSObject {
     private func checkAndReduceQualityIfNeeded() {
         guard session.hardwareCost > 1.0 else { return }
         let res = AppSettings.shared.videoResolution
-        // 降帧率：60→30，30→24，24 无法再降则跳过
         let currentFps = AppSettings.shared.frameRate.rawValue
         let fallbackFps: Int
         switch currentFps {
@@ -179,13 +192,12 @@ class CameraManager: NSObject {
             applyFormat(targetWidth: res.targetWidth, fps: fallbackFps, to: device)
         }
         session.commitConfiguration()
-        let msg = "当前设置超出硬件限制，帧率已自动降至 \(fallbackFps)fps"
-        DispatchQueue.main.async { [weak self] in
-            self?.onQualityReduced?(msg)
-        }
+        pendingQualityMessage = "当前设置超出硬件限制，帧率已自动降至 \(fallbackFps)fps"
     }
 
-    private func applyFormat(targetWidth: Int, fps: Int, to device: AVCaptureDevice) {
+    /// 返回实际应用的帧率
+    @discardableResult
+    private func applyFormat(targetWidth: Int, fps: Int, to device: AVCaptureDevice) -> Int {
         let pos = device.position == .back ? "back" : "front"
         let multiCamFormats = device.formats.filter { fmt in
             guard fmt.isMultiCamSupported else { return false }
@@ -194,10 +206,9 @@ class CameraManager: NSObject {
         }
         guard !multiCamFormats.isEmpty else {
             print("[MultiCam] \(pos): no MultiCam format at width=\(targetWidth), skipped")
-            return
+            return fps
         }
 
-        // 优先找支持目标帧率的格式，否则退而使用同分辨率下帧率最高的格式
         let exact = multiCamFormats.first {
             $0.videoSupportedFrameRateRanges.contains { $0.maxFrameRate >= Float64(fps) }
         }
@@ -206,11 +217,10 @@ class CameraManager: NSObject {
             ($1.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? 0)
         })!
 
-        // 实际帧率不超过所选格式的上限，避免设置非法帧率
         let maxFps = format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? Double(fps)
-        let actualFps = min(Double(fps), maxFps)
+        let actualFps = Int(min(Double(fps), maxFps))
         let dims = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-        print("[MultiCam] \(pos): requested \(targetWidth)×?@\(fps)fps → actual \(dims.width)×\(dims.height)@\(Int(actualFps))fps (exact=\(exact != nil))")
+        print("[MultiCam] \(pos): requested \(targetWidth)×?@\(fps)fps → actual \(dims.width)×\(dims.height)@\(actualFps)fps")
 
         try? device.lockForConfiguration()
         device.activeFormat = format
@@ -218,6 +228,7 @@ class CameraManager: NSObject {
         device.activeVideoMinFrameDuration = dur
         device.activeVideoMaxFrameDuration = dur
         device.unlockForConfiguration()
+        return actualFps
     }
 
     // MARK: - Private 配置

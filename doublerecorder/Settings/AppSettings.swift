@@ -47,7 +47,7 @@ final class AppSettings {
     }
 
     var videoResolution: VideoResolution {
-        get { VideoResolution(rawValue: UserDefaults.standard.string(forKey: "videoResolution") ?? "") ?? .hd1080 }
+        get { VideoResolution(rawValue: UserDefaults.standard.string(forKey: "videoResolution") ?? "") ?? .hd720 }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "videoResolution") }
     }
 
@@ -62,7 +62,7 @@ final class AppSettings {
     }
 
     var frameRate: FrameRate {
-        get { FrameRate(rawValue: UserDefaults.standard.integer(forKey: "frameRate")) ?? .fps30 }
+        get { FrameRate(rawValue: UserDefaults.standard.integer(forKey: "frameRate")) ?? .fps60 }
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "frameRate") }
     }
 
