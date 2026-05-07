@@ -13,6 +13,7 @@ class RecordingsListViewController: UIViewController {
         let type: String      // "merged", "back", "front"
         let url: URL
         var durationSeconds: Int = 0
+        var isPhoto: Bool = false
 
         var displayTitle: String {
             let df = DateFormatter()
@@ -21,6 +22,7 @@ class RecordingsListViewController: UIViewController {
             return df.string(from: date)
         }
         var displayDuration: String {
+            if isPhoto { return "—" }
             guard durationSeconds > 0 else { return "—" }
             let m = durationSeconds / 60
             let s = durationSeconds % 60
@@ -109,19 +111,22 @@ class RecordingsListViewController: UIViewController {
         ) else { records = []; refresh(); return }
 
         var result: [VideoRecord] = []
-        for url in files where url.pathExtension.lowercased() == "mp4" {
-            let name = url.deletingPathExtension().lastPathComponent
+        for url in files {
+            let ext = url.pathExtension.lowercased()
+            guard ext == "mp4" || ext == "jpg" else { continue }
             // format: yyyyMMddHHmmss-type  e.g. 20241205143022-merged
+            let name = url.deletingPathExtension().lastPathComponent
             guard let dash = name.firstIndex(of: "-") else { continue }
             let ts   = String(name[name.startIndex ..< dash])
             let type = String(name[name.index(after: dash)...])
             guard ts.count == 14, !type.isEmpty else { continue }
             let date = Self.parseDate(ts) ?? Date.distantPast
-            result.append(VideoRecord(filename: name, date: date, type: type, url: url))
+            result.append(VideoRecord(filename: name, date: date, type: type, url: url, isPhoto: ext == "jpg"))
         }
         records = result.sorted { $0.date > $1.date }
 
         for i in records.indices {
+            guard !records[i].isPhoto else { continue }
             let filename = records[i].filename
             let url = records[i].url
             DispatchQueue.global(qos: .utility).async { [weak self] in
@@ -153,10 +158,10 @@ class RecordingsListViewController: UIViewController {
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: dir, includingPropertiesForKeys: nil, options: .skipsHiddenFiles
         ) else { return 0 }
-        return files.filter { $0.pathExtension.lowercased() == "mp4" }.count
+        return files.filter { ["mp4", "jpg"].contains($0.pathExtension.lowercased()) }.count
     }
 
-    private static func recordingsDirectory() -> URL {
+    static func recordingsDirectory() -> URL {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Recordings", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -190,10 +195,15 @@ extension RecordingsListViewController: UITableViewDataSource, UITableViewDelega
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let player = AVPlayer(url: records[indexPath.row].url)
-        let vc = AVPlayerViewController()
-        vc.player = player
-        present(vc, animated: true) { player.play() }
+        let record = records[indexPath.row]
+        if record.isPhoto {
+            present(PhotoViewerController(url: record.url), animated: true)
+        } else {
+            let player = AVPlayer(url: record.url)
+            let vc = AVPlayerViewController()
+            vc.player = player
+            present(vc, animated: true) { player.play() }
+        }
     }
 
     func tableView(_ tableView: UITableView,
@@ -337,26 +347,74 @@ private final class VideoCell: UITableViewCell {
         typeBadge.backgroundColor = color.withAlphaComponent(0.15)
 
         thumbImgView.image = nil
-        playIcon.isHidden  = false
         thumbTask?.cancel()
 
         let url = record.url
-        let task = DispatchWorkItem { [weak self] in
-            let gen = AVAssetImageGenerator(asset: AVAsset(url: url))
-            gen.appliesPreferredTrackTransform = true
-            gen.maximumSize = CGSize(width: 160, height: 116)
-            guard let cg = try? gen.copyCGImage(at: .zero, actualTime: nil) else { return }
-            let img = UIImage(cgImage: cg)
-            DispatchQueue.main.async { [weak self] in
-                self?.thumbImgView.image = img
-                self?.playIcon.isHidden  = true
+        if record.isPhoto {
+            playIcon.isHidden = true
+            let task = DispatchWorkItem { [weak self] in
+                guard let data = try? Data(contentsOf: url), let img = UIImage(data: data) else { return }
+                DispatchQueue.main.async { [weak self] in
+                    self?.thumbImgView.image = img
+                }
             }
+            thumbTask = task
+            DispatchQueue.global(qos: .utility).async(execute: task)
+        } else {
+            playIcon.isHidden = false
+            let task = DispatchWorkItem { [weak self] in
+                let gen = AVAssetImageGenerator(asset: AVAsset(url: url))
+                gen.appliesPreferredTrackTransform = true
+                gen.maximumSize = CGSize(width: 160, height: 116)
+                guard let cg = try? gen.copyCGImage(at: .zero, actualTime: nil) else { return }
+                let img = UIImage(cgImage: cg)
+                DispatchQueue.main.async { [weak self] in
+                    self?.thumbImgView.image = img
+                    self?.playIcon.isHidden  = true
+                }
+            }
+            thumbTask = task
+            DispatchQueue.global(qos: .utility).async(execute: task)
         }
-        thumbTask = task
-        DispatchQueue.global(qos: .utility).async(execute: task)
     }
 }
 
 extension Notification.Name {
     static let recordingsChanged = Notification.Name("recordingsChanged")
+}
+
+// MARK: - Photo Viewer
+
+private final class PhotoViewerController: UIViewController {
+
+    private let imageView = UIImageView()
+
+    init(url: URL) {
+        super.init(nibName: nil, bundle: nil)
+        modalPresentationStyle = .fullScreen
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let data = try? Data(contentsOf: url), let img = UIImage(data: data) else { return }
+            DispatchQueue.main.async { self?.imageView.image = img }
+        }
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+        imageView.contentMode = .scaleAspectFit
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(imageView)
+        NSLayoutConstraint.activate([
+            imageView.topAnchor.constraint(equalTo: view.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+        view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(closeTapped)))
+    }
+
+    override var prefersStatusBarHidden: Bool { true }
+
+    @objc private func closeTapped() { dismiss(animated: true) }
 }

@@ -1237,23 +1237,37 @@ class ViewController: UIViewController {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             let ctx = CIContext(options: [.useSoftwareRenderer: false])
-            var images: [UIImage] = []
+            var pairs: [(UIImage, String)] = []  // (image, type)
 
             if let buf = composite, let img = self.cvBufferToImage(buf, context: ctx) {
-                images.append(img)
+                pairs.append((img, "merged"))
             }
             if settings.saveBack, let buf = back,
-               let img = self.cvBufferToImage(buf, context: ctx) { images.append(img) }
+               let img = self.cvBufferToImage(buf, context: ctx) { pairs.append((img, "back")) }
             if settings.saveFront, let buf = front,
-               let img = self.cvBufferToImage(buf, context: ctx) { images.append(img) }
+               let img = self.cvBufferToImage(buf, context: ctx) { pairs.append((img, "front")) }
 
-            guard !images.isEmpty else {
+            guard !pairs.isEmpty else {
                 DispatchQueue.main.async { self.recordButton.isEnabled = true }
                 return
             }
+
+            // 保存到本地 Recordings 目录供应用内画廊使用
+            let tsFormatter = DateFormatter()
+            tsFormatter.locale = Locale(identifier: "en_US_POSIX")
+            tsFormatter.dateFormat = "yyyyMMddHHmmss"
+            let ts = tsFormatter.string(from: Date())
+            let dir = RecordingsListViewController.recordingsDirectory()
+            for (img, type) in pairs {
+                let url = dir.appendingPathComponent("\(ts)-\(type).jpg")
+                if let data = img.jpegData(compressionQuality: 0.92) {
+                    try? data.write(to: url)
+                }
+            }
+
             let group = DispatchGroup()
             var saveError: Error?
-            for img in images {
+            for (img, _) in pairs {
                 group.enter()
                 PHPhotoLibrary.shared().performChanges({
                     PHAssetChangeRequest.creationRequestForAsset(from: img)
@@ -1264,6 +1278,7 @@ class ViewController: UIViewController {
             }
             group.notify(queue: .main) { [weak self] in
                 self?.recordButton.isEnabled = true
+                NotificationCenter.default.post(name: .recordingsChanged, object: nil)
                 if let e = saveError {
                     self?.showAlert(title: "拍照失败", message: e.localizedDescription)
                 }

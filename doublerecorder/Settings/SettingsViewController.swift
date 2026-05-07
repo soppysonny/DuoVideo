@@ -103,7 +103,11 @@ class SettingsViewController: UIViewController {
         modeSegment.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
         modeSegment.heightAnchor.constraint(equalToConstant: 36).isActive = true
         vStack.addArrangedSubview(modeSegment)
-        vStack.setCustomSpacing(32, after: modeSegment)
+        vStack.setCustomSpacing(8, after: modeSegment)
+
+        let modeCaption = sectionLabel("切换此选项即切换拍摄模式")
+        vStack.addArrangedSubview(modeCaption)
+        vStack.setCustomSpacing(32, after: modeCaption)
 
         // ── 保存文件 ──────────────────────────────────────────
         vStack.addArrangedSubview(sectionLabel("保存文件"))
