@@ -10,7 +10,6 @@ class ViewController: UIViewController {
     // MARK: - State
 
     private var isFlashOn    = false
-    private var isMicMuted   = false
     private var isFrontMirror: Bool { AppSettings.shared.recordMirrored }
     private var isGridOn     = false
     private var isAELocked   = false
@@ -71,9 +70,9 @@ class ViewController: UIViewController {
     // MARK: - Side toolbar
 
     private let sideToolbarBlur = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
-    private let flashBtn  = ToolbarButton(icon: "bolt.fill",       iconOff: "bolt.slash.fill", title: "FLASH")
-    private let micBtn    = ToolbarButton(icon: "mic.fill",         iconOff: "mic.slash.fill",  title: "MIC")
-    private let mirrorBtn = ToolbarButton(icon: "camera.filters",   iconOff: nil,               title: "MIRROR")
+    private let flashBtn   = ToolbarButton(icon: "bolt.fill",       iconOff: "bolt.slash.fill", title: "FLASH")
+    private let pipCamBtn  = ToolbarButton(icon: "camera.fill",    iconOff: "person.fill",      title: "PiP")
+    private let mirrorBtn  = ToolbarButton(icon: "camera.filters", iconOff: nil,               title: "MIRROR")
     private let gridBtn   = ToolbarButton(icon: "grid",             iconOff: nil,               title: "GRID")
     private let aeLockBtn    = ToolbarButton(icon: "lock.fill",        iconOff: "lock.open.fill",  title: "AE/AF")
     private let settingsBtn  = ToolbarButton(icon: "gearshape.fill",   iconOff: nil,               title: "SET")
@@ -291,14 +290,6 @@ class ViewController: UIViewController {
         mirrorStateLabel.frame = CGRect(x: 8, y: 6, width: 60, height: 12)
         pipBottomView.addSubview(mirrorStateLabel)
 
-        let micStateLabel = UILabel()
-        micStateLabel.tag = 1002
-        micStateLabel.font = UIFont.monospacedSystemFont(ofSize: 8, weight: .semibold)
-        micStateLabel.textColor = UIColor(red: 0.204, green: 0.78, blue: 0.349, alpha: 1)
-        micStateLabel.text = "MIC"
-        micStateLabel.sizeToFit()
-        pipBottomView.addSubview(micStateLabel)
-
         // Recording red border layer
         pipRecBorderLayer.borderColor = UIColor(red: 1, green: 0.231, blue: 0.188, alpha: 0.85).cgColor
         pipRecBorderLayer.borderWidth = 1.5
@@ -402,7 +393,7 @@ class ViewController: UIViewController {
 
         for (btn, sel) in [
             (flashBtn,    #selector(handleFlash)),
-            (micBtn,      #selector(handleMic)),
+            (pipCamBtn,   #selector(handlePiPCam)),
             (mirrorBtn,   #selector(handleMirror)),
             (gridBtn,     #selector(handleGrid)),
             (aeLockBtn,   #selector(handleAELock)),
@@ -414,6 +405,12 @@ class ViewController: UIViewController {
 
         // Initial active state driven by AppSettings
         mirrorBtn.isActive = AppSettings.shared.recordMirrored
+        pipCamBtn.isActive = AppSettings.shared.pipCamera == .backUltraWide
+        if #available(iOS 13.0, *) {
+            pipCamBtn.isEnabled = CameraManager.isUltraWideMultiCamSupported
+        } else {
+            pipCamBtn.isEnabled = false
+        }
     }
 
     // MARK: - Bottom Dock Setup
@@ -589,7 +586,7 @@ class ViewController: UIViewController {
         let gap: CGFloat   = 5
         let padding: CGFloat = 6
         let count          = CGFloat(6)
-        let buttons        = [flashBtn, micBtn, mirrorBtn, gridBtn, aeLockBtn, settingsBtn] as [UIView]
+        let buttons        = [flashBtn, pipCamBtn, mirrorBtn, gridBtn, aeLockBtn, settingsBtn] as [UIView]
 
         if isLandscape {
             let dockW: CGFloat    = 110
@@ -728,10 +725,6 @@ class ViewController: UIViewController {
         pipBottomView.frame = CGRect(x: 0, y: pipH - 26, width: pipW, height: 26)
         pipBottomView.layer.sublayers?.compactMap { $0 as? CAGradientLayer }.forEach {
             $0.frame = CGRect(x: 0, y: 0, width: pipW, height: 26)
-        }
-        if let micLbl = pipBottomView.viewWithTag(1002) as? UILabel {
-            micLbl.sizeToFit()
-            micLbl.frame.origin = CGPoint(x: pipW - 8 - micLbl.frame.width, y: 6)
         }
         pipRecBorderLayer.frame = CGRect(x: 0, y: 0, width: pipW, height: pipH)
         pipRecBorderLayer.cornerRadius = 16
@@ -970,7 +963,6 @@ class ViewController: UIViewController {
         lockedOrientation = orientation
         cameraManager?.setVideoOrientation(orientation)
         recordingOrientationMask = view.window?.windowScene?.interfaceOrientation.asMask ?? .portrait
-        videoRecorder.isMicMuted    = isMicMuted
         videoRecorder.saveComposite = AppSettings.shared.saveComposite
         videoRecorder.saveBack      = AppSettings.shared.saveBack
         videoRecorder.saveFront     = AppSettings.shared.saveFront
@@ -1081,9 +1073,7 @@ class ViewController: UIViewController {
     }
 
     @objc private func displayLinkTick() {
-        // Smoothly track the captured audio level
-        let target: Float = isMicMuted ? 0 : audioLevelValue
-        levelMeterView.level += (target - levelMeterView.level) * 0.2
+        levelMeterView.level += (audioLevelValue - levelMeterView.level) * 0.2
         animateWaveBars(level: CGFloat(levelMeterView.level))
         updateAELabel()
     }
@@ -1157,16 +1147,21 @@ class ViewController: UIViewController {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    @objc private func handleMic() {
-        isMicMuted.toggle()
-        micBtn.isActive = isMicMuted  // active = muted (cross icon)
-        videoRecorder.isMicMuted = isMicMuted
-        if let lbl = pipBottomView.viewWithTag(1002) as? UILabel {
-            lbl.text = isMicMuted ? "MUTE" : "MIC"
-            lbl.textColor = isMicMuted
-                ? UIColor.white.withAlphaComponent(0.38)
-                : UIColor(red: 0.204, green: 0.78, blue: 0.349, alpha: 1)
+    @objc private func handlePiPCam() {
+        guard #available(iOS 13.0, *) else { return }
+        guard videoRecorder.state != .recording else { return }
+        if AppSettings.shared.pipCamera == .front {
+            guard CameraManager.isUltraWideMultiCamSupported else {
+                showToast("当前设备不支持超广角双摄")
+                return
+            }
+            AppSettings.shared.pipCamera = .backUltraWide
+            pipCamBtn.isActive = true
+        } else {
+            AppSettings.shared.pipCamera = .front
+            pipCamBtn.isActive = false
         }
+        rebuildCamera()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
