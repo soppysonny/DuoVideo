@@ -4,6 +4,8 @@ final class AppSettings {
     static let shared = AppSettings()
     private init() {}
 
+    // MARK: - Capture mode
+
     enum CaptureMode: String { case video, photo }
 
     var captureMode: CaptureMode {
@@ -11,27 +13,58 @@ final class AppSettings {
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "captureMode") }
     }
 
+    // MARK: - Save outputs
+
     var saveComposite: Bool {
         get { UserDefaults.standard.object(forKey: "saveComposite") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "saveComposite") }
     }
-
     var saveBack: Bool {
         get { UserDefaults.standard.object(forKey: "saveBack") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "saveBack") }
     }
-
     var saveFront: Bool {
         get { UserDefaults.standard.object(forKey: "saveFront") as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: "saveFront") }
     }
+    var atLeastOneSaveEnabled: Bool { saveComposite || saveBack || saveFront }
+
+    // MARK: - Video resolution
+
+    enum VideoResolution: String {
+        case hd720  = "720p"
+        case hd1080 = "1080p"
+
+        var hudLabel: String { rawValue.uppercased() }
+        var targetWidth: Int { self == .hd720 ? 1280 : 1920 }
+    }
+
+    var videoResolution: VideoResolution {
+        get { VideoResolution(rawValue: UserDefaults.standard.string(forKey: "videoResolution") ?? "") ?? .hd1080 }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "videoResolution") }
+    }
+
+    // MARK: - Frame rate
+
+    enum FrameRate: Int {
+        case fps24 = 24
+        case fps30 = 30
+        case fps60 = 60
+
+        var hudLabel: String { "\(rawValue)P" }
+    }
+
+    var frameRate: FrameRate {
+        get { FrameRate(rawValue: UserDefaults.standard.integer(forKey: "frameRate")) ?? .fps30 }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "frameRate") }
+    }
+
+    // MARK: - Pro
 
     var isProUser: Bool {
         get { UserDefaults.standard.bool(forKey: "isProUser") }
         set { UserDefaults.standard.set(newValue, forKey: "isProUser") }
     }
-
-    var atLeastOneSaveEnabled: Bool { saveComposite || saveBack || saveFront }
 }
 
 extension Notification.Name {

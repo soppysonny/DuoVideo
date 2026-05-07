@@ -129,6 +129,13 @@ class ViewController: UIViewController {
         cameraManager?.startRunning()
         syncOrientationIfNeeded()
         refreshGalleryBadge()
+        syncHUDLabels()
+    }
+
+    private func syncHUDLabels() {
+        let s = AppSettings.shared
+        resLabel.text = s.videoResolution.hudLabel
+        fpsLabel.text = s.frameRate.hudLabel
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -332,21 +339,21 @@ class ViewController: UIViewController {
         topTimerLabel.tag = 802
         topLeftPill.contentView.addSubview(topTimerLabel)
 
-        resLabel.text = "4K"
+        resLabel.text = AppSettings.shared.videoResolution.hudLabel
         resLabel.font = UIFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
         resLabel.textColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 1)
         topRightPill.contentView.addSubview(resLabel)
 
         let sep2 = UIView(); sep2.backgroundColor = UIColor.white.withAlphaComponent(0.10); sep2.tag = 811
         topRightPill.contentView.addSubview(sep2)
-        fpsLabel.text = "30P"
+        fpsLabel.text = AppSettings.shared.frameRate.hudLabel
         fpsLabel.font = UIFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
         fpsLabel.textColor = UIColor.white.withAlphaComponent(0.62)
         topRightPill.contentView.addSubview(fpsLabel)
 
         let sep3 = UIView(); sep3.backgroundColor = UIColor.white.withAlphaComponent(0.10); sep3.tag = 812
         topRightPill.contentView.addSubview(sep3)
-        codecLabel.text = "HEVC"
+        codecLabel.text = "H264"
         codecLabel.font = UIFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
         codecLabel.textColor = UIColor(red: 0.204, green: 0.78, blue: 0.349, alpha: 1)
         topRightPill.contentView.addSubview(codecLabel)
@@ -1198,8 +1205,8 @@ class ViewController: UIViewController {
     }
 
     @objc private func handleSettings() {
-        cameraManager?.stopRunning()
         let vc = SettingsViewController()
+        vc.modalPresentationStyle = .fullScreen
         present(vc, animated: true)
     }
 

@@ -4,127 +4,219 @@ class SettingsViewController: UIViewController {
 
     private let settings = AppSettings.shared
 
-    private let modeSegment    = UISegmentedControl(items: ["VIDEO", "PHOTO"])
-    private let compositeRow   = SettingsToggleRow(title: "COMPOSITE", subtitle: "前后摄 PiP 合成视频")
-    private let backRow        = SettingsToggleRow(title: "BACK CAM",  subtitle: "后摄独立视频")
-    private let frontRow       = SettingsToggleRow(title: "FRONT CAM", subtitle: "前摄独立视频")
+    private let modeSegment  = UISegmentedControl(items: ["VIDEO", "PHOTO"])
+    private let compositeRow = SettingsToggleRow(title: "COMPOSITE", subtitle: "前后摄 PiP 合成视频")
+    private let backRow      = SettingsToggleRow(title: "BACK CAM",  subtitle: "后摄独立视频")
+    private let frontRow     = SettingsToggleRow(title: "FRONT CAM", subtitle: "前摄独立视频")
+
+    private var resTiles: [OptionTile] = []
+    private var fpsTiles: [OptionTile] = []
 
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(white: 0.07, alpha: 1)
-        setupSheetIfAvailable()
+        view.backgroundColor = UIColor(white: 0.06, alpha: 1)
         buildUI()
         syncFromSettings()
     }
 
-    private func setupSheetIfAvailable() {
-        if #available(iOS 15.0, *) {
-            if let sheet = sheetPresentationController {
-                sheet.detents = [.medium()]
-                sheet.prefersGrabberVisible = true
-                sheet.preferredCornerRadius = 20
-            }
-        }
-        modalPresentationStyle = .automatic
-    }
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
 
     // MARK: - Build UI
 
     private func buildUI() {
-        let cv = view!
-
-        // Title bar
+        // Title
         let titleLabel = UILabel()
-        titleLabel.text = "SETTINGS"
-        titleLabel.font = UIFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
-        titleLabel.textColor = UIColor.white.withAlphaComponent(0.50)
+        titleLabel.text      = "SETTINGS"
+        titleLabel.font      = UIFont.monospacedSystemFont(ofSize: 13, weight: .semibold)
+        titleLabel.textColor = .white
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        cv.addSubview(titleLabel)
+        view.addSubview(titleLabel)
 
-        // Mode section header
-        let modeHeader = sectionHeader("CAPTURE MODE")
-        cv.addSubview(modeHeader)
+        // Close button
+        let closeBtn = UIButton(type: .system)
+        let iconCfg  = UIImage.SymbolConfiguration(pointSize: 13, weight: .medium)
+        closeBtn.setImage(UIImage(systemName: "xmark", withConfiguration: iconCfg), for: .normal)
+        closeBtn.tintColor = UIColor.white.withAlphaComponent(0.55)
+        closeBtn.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+        closeBtn.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(closeBtn)
 
-        // Mode segment
-        modeSegment.selectedSegmentTintColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 0.9)
-        modeSegment.backgroundColor = UIColor(white: 0.14, alpha: 1)
-        let normal: [NSAttributedString.Key: Any] = [
-            .font: UIFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
-            .foregroundColor: UIColor.white.withAlphaComponent(0.62)
-        ]
-        let selected: [NSAttributedString.Key: Any] = [
-            .font: UIFont.monospacedSystemFont(ofSize: 11, weight: .bold),
-            .foregroundColor: UIColor.black
-        ]
-        modeSegment.setTitleTextAttributes(normal,   for: .normal)
-        modeSegment.setTitleTextAttributes(selected, for: .selected)
-        modeSegment.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
-        modeSegment.translatesAutoresizingMaskIntoConstraints = false
-        cv.addSubview(modeSegment)
+        // Header divider
+        let divider = UIView()
+        divider.backgroundColor = UIColor.white.withAlphaComponent(0.08)
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(divider)
 
-        // Save outputs section header
-        let saveHeader = sectionHeader("SAVE OUTPUTS")
-        cv.addSubview(saveHeader)
+        // Scroll view
+        let scroll = UIScrollView()
+        scroll.alwaysBounceVertical      = true
+        scroll.showsVerticalScrollIndicator = false
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scroll)
 
-        // Toggle rows
-        for row in [compositeRow, backRow, frontRow] {
-            row.translatesAutoresizingMaskIntoConstraints = false
-            row.onToggle = { [weak self] _ in self?.validateAndSave() }
-            cv.addSubview(row)
-        }
-
-        let gap: CGFloat = 1
-
+        let safeTop = view.safeAreaLayoutGuide.topAnchor
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: cv.topAnchor, constant: 20),
-            titleLabel.centerXAnchor.constraint(equalTo: cv.centerXAnchor),
+            titleLabel.topAnchor.constraint(equalTo: safeTop, constant: 18),
+            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
 
-            modeHeader.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 22),
-            modeHeader.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 20),
+            closeBtn.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            closeBtn.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            closeBtn.widthAnchor.constraint(equalToConstant: 30),
+            closeBtn.heightAnchor.constraint(equalToConstant: 30),
 
-            modeSegment.topAnchor.constraint(equalTo: modeHeader.bottomAnchor, constant: 8),
-            modeSegment.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 20),
-            modeSegment.trailingAnchor.constraint(equalTo: cv.trailingAnchor, constant: -20),
-            modeSegment.heightAnchor.constraint(equalToConstant: 36),
+            divider.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 16),
+            divider.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            divider.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            divider.heightAnchor.constraint(equalToConstant: 0.5),
 
-            saveHeader.topAnchor.constraint(equalTo: modeSegment.bottomAnchor, constant: 24),
-            saveHeader.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 20),
-
-            compositeRow.topAnchor.constraint(equalTo: saveHeader.bottomAnchor, constant: 8),
-            compositeRow.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 16),
-            compositeRow.trailingAnchor.constraint(equalTo: cv.trailingAnchor, constant: -16),
-            compositeRow.heightAnchor.constraint(equalToConstant: 56),
-
-            backRow.topAnchor.constraint(equalTo: compositeRow.bottomAnchor, constant: gap),
-            backRow.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 16),
-            backRow.trailingAnchor.constraint(equalTo: cv.trailingAnchor, constant: -16),
-            backRow.heightAnchor.constraint(equalToConstant: 56),
-
-            frontRow.topAnchor.constraint(equalTo: backRow.bottomAnchor, constant: gap),
-            frontRow.leadingAnchor.constraint(equalTo: cv.leadingAnchor, constant: 16),
-            frontRow.trailingAnchor.constraint(equalTo: cv.trailingAnchor, constant: -16),
-            frontRow.heightAnchor.constraint(equalToConstant: 56),
+            scroll.topAnchor.constraint(equalTo: divider.bottomAnchor),
+            scroll.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            scroll.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
+
+        buildScrollContent(in: scroll)
     }
 
-    private func sectionHeader(_ text: String) -> UILabel {
+    private func buildScrollContent(in scroll: UIScrollView) {
+        let vStack = UIStackView()
+        vStack.axis = .vertical
+        vStack.translatesAutoresizingMaskIntoConstraints = false
+        scroll.addSubview(vStack)
+
+        NSLayoutConstraint.activate([
+            vStack.topAnchor.constraint(equalTo: scroll.topAnchor, constant: 24),
+            vStack.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: 16),
+            vStack.trailingAnchor.constraint(equalTo: scroll.trailingAnchor, constant: -16),
+            vStack.bottomAnchor.constraint(equalTo: scroll.bottomAnchor, constant: -40),
+            vStack.widthAnchor.constraint(equalTo: scroll.widthAnchor, constant: -32),
+        ])
+
+        // ── 拍摄模式 ──────────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel("拍摄模式"))
+        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
+
+        styleSegment(modeSegment)
+        modeSegment.addTarget(self, action: #selector(modeChanged), for: .valueChanged)
+        modeSegment.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        vStack.addArrangedSubview(modeSegment)
+        vStack.setCustomSpacing(32, after: modeSegment)
+
+        // ── 保存文件 ──────────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel("保存文件"))
+        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
+
+        let toggleRows: [SettingsToggleRow] = [compositeRow, backRow, frontRow]
+        for (i, row) in toggleRows.enumerated() {
+            row.onToggle = { [weak self] _ in self?.validateAndSave() }
+            row.setCorners(top: i == 0, bottom: i == toggleRows.count - 1)
+            row.heightAnchor.constraint(equalToConstant: 56).isActive = true
+            vStack.addArrangedSubview(row)
+            vStack.setCustomSpacing(i < toggleRows.count - 1 ? 1 : 32, after: row)
+        }
+
+        // ── 清晰度 ────────────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel("清晰度"))
+        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
+
+        let resRow = makePickerRow()
+        let resOptions: [(String, String, AppSettings.VideoResolution)] = [
+            ("720P",  "HD · 1280×720",   .hd720),
+            ("1080P", "FHD · 1920×1080", .hd1080),
+        ]
+        for opt in resOptions {
+            let tile = OptionTile(title: opt.0, subtitle: opt.1)
+            let res  = opt.2
+            tile.onTap = { [weak self] in
+                self?.settings.videoResolution = res
+                self?.syncResTiles()
+            }
+            resTiles.append(tile)
+            resRow.addArrangedSubview(tile)
+        }
+        vStack.addArrangedSubview(resRow)
+        vStack.setCustomSpacing(32, after: resRow)
+
+        // ── 帧率 ──────────────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel("帧率"))
+        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
+
+        let fpsRow = makePickerRow()
+        let fpsOptions: [(String, String, AppSettings.FrameRate)] = [
+            ("24", "fps", .fps24),
+            ("30", "fps", .fps30),
+            ("60", "fps", .fps60),
+        ]
+        for opt in fpsOptions {
+            let tile = OptionTile(title: opt.0, subtitle: opt.1)
+            let rate = opt.2
+            tile.onTap = { [weak self] in
+                self?.settings.frameRate = rate
+                self?.syncFpsTiles()
+            }
+            fpsTiles.append(tile)
+            fpsRow.addArrangedSubview(tile)
+        }
+        vStack.addArrangedSubview(fpsRow)
+    }
+
+    private func sectionLabel(_ text: String) -> UILabel {
         let l = UILabel()
-        l.text = text
-        l.font = UIFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
+        l.text      = text
+        l.font      = UIFont.monospacedSystemFont(ofSize: 9, weight: .semibold)
         l.textColor = UIColor.white.withAlphaComponent(0.35)
-        l.translatesAutoresizingMaskIntoConstraints = false
         return l
     }
 
-    // MARK: - State
+    private func makePickerRow() -> UIStackView {
+        let s = UIStackView()
+        s.axis         = .horizontal
+        s.spacing      = 8
+        s.distribution = .fillEqually
+        s.heightAnchor.constraint(equalToConstant: 72).isActive = true
+        return s
+    }
+
+    private func styleSegment(_ seg: UISegmentedControl) {
+        seg.selectedSegmentTintColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 0.9)
+        seg.backgroundColor = UIColor(white: 0.14, alpha: 1)
+        seg.setTitleTextAttributes([
+            .font: UIFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
+            .foregroundColor: UIColor.white.withAlphaComponent(0.62),
+        ], for: .normal)
+        seg.setTitleTextAttributes([
+            .font: UIFont.monospacedSystemFont(ofSize: 11, weight: .bold),
+            .foregroundColor: UIColor.black,
+        ], for: .selected)
+    }
+
+    // MARK: - Sync
 
     private func syncFromSettings() {
         modeSegment.selectedSegmentIndex = settings.captureMode == .video ? 0 : 1
         compositeRow.isOn = settings.saveComposite
         backRow.isOn      = settings.saveBack
         frontRow.isOn     = settings.saveFront
+        syncResTiles()
+        syncFpsTiles()
+    }
+
+    private func syncResTiles() {
+        let order: [AppSettings.VideoResolution] = [.hd720, .hd1080]
+        for (tile, val) in zip(resTiles, order) { tile.isSelected = val == settings.videoResolution }
+    }
+
+    private func syncFpsTiles() {
+        let order: [AppSettings.FrameRate] = [.fps24, .fps30, .fps60]
+        for (tile, val) in zip(fpsTiles, order) { tile.isSelected = val == settings.frameRate }
+    }
+
+    // MARK: - Actions
+
+    @objc private func closeTapped() {
+        dismiss(animated: true)
     }
 
     @objc private func modeChanged() {
@@ -157,10 +249,9 @@ final class SettingsToggleRow: UIView {
         get { toggle.isOn }
         set { toggle.setOn(newValue, animated: false) }
     }
-
     var onToggle: ((Bool) -> Void)?
 
-    private let bg            = UIView()
+    fileprivate let bg     = UIView()
     private let titleLabel    = UILabel()
     private let subtitleLabel = UILabel()
     private let toggle        = UISwitch()
@@ -206,8 +297,77 @@ final class SettingsToggleRow: UIView {
             toggle.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -16),
         ])
     }
-
     required init?(coder: NSCoder) { fatalError() }
 
     @objc private func toggleChanged() { onToggle?(toggle.isOn) }
+
+    func setCorners(top: Bool, bottom: Bool) {
+        var mask: CACornerMask = []
+        if top    { mask.formUnion([.layerMinXMinYCorner, .layerMaxXMinYCorner]) }
+        if bottom { mask.formUnion([.layerMinXMaxYCorner, .layerMaxXMaxYCorner]) }
+        bg.layer.maskedCorners = mask
+        bg.layer.cornerRadius  = (top || bottom) ? 12 : 0
+    }
+}
+
+// MARK: - OptionTile
+
+private final class OptionTile: UIView {
+
+    var isSelected: Bool = false { didSet { updateStyle() } }
+    var onTap: (() -> Void)?
+
+    private let titleLbl = UILabel()
+    private let subLbl   = UILabel()
+
+    init(title: String, subtitle: String) {
+        super.init(frame: .zero)
+        layer.cornerRadius = 12
+        layer.borderWidth  = 1
+
+        let vStack = UIStackView()
+        vStack.axis      = .vertical
+        vStack.alignment = .center
+        vStack.spacing   = 4
+        vStack.isUserInteractionEnabled = false
+        vStack.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(vStack)
+
+        titleLbl.text = title
+        titleLbl.font = UIFont.monospacedSystemFont(ofSize: 18, weight: .semibold)
+        vStack.addArrangedSubview(titleLbl)
+
+        subLbl.text = subtitle
+        subLbl.font = UIFont.monospacedSystemFont(ofSize: 9, weight: .regular)
+        vStack.addArrangedSubview(subLbl)
+
+        NSLayoutConstraint.activate([
+            vStack.centerXAnchor.constraint(equalTo: centerXAnchor),
+            vStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+
+        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
+        updateStyle()
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    @objc private func tapped() {
+        onTap?()
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    private func updateStyle() {
+        let amber = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 1)
+        if isSelected {
+            backgroundColor   = amber.withAlphaComponent(0.12)
+            layer.borderColor = amber.withAlphaComponent(0.50).cgColor
+            titleLbl.textColor = amber
+            subLbl.textColor   = amber.withAlphaComponent(0.65)
+        } else {
+            backgroundColor   = UIColor(white: 0.13, alpha: 1)
+            layer.borderColor = UIColor.white.withAlphaComponent(0.10).cgColor
+            titleLbl.textColor = UIColor.white.withAlphaComponent(0.70)
+            subLbl.textColor   = UIColor.white.withAlphaComponent(0.35)
+        }
+    }
 }

@@ -67,7 +67,11 @@ class CameraManager: NSObject {
 
     func startRunning() {
         sessionQueue.async { [weak self] in
-            self?.session.startRunning()
+            guard let self else { return }
+            self.session.beginConfiguration()
+            self.applyFormatSettings()
+            self.session.commitConfiguration()
+            self.session.startRunning()
         }
     }
 
@@ -138,6 +142,32 @@ class CameraManager: NSObject {
                 self.frontPreviewConnection?.videoOrientation = orientation
             }
         }
+    }
+
+    // MARK: - 格式 / 帧率
+
+    private func applyFormatSettings() {
+        let res = AppSettings.shared.videoResolution
+        let fps = AppSettings.shared.frameRate.rawValue
+        for device in [backDevice, frontDevice].compactMap({ $0 }) {
+            applyFormat(targetWidth: res.targetWidth, fps: fps, to: device)
+        }
+    }
+
+    private func applyFormat(targetWidth: Int, fps: Int, to device: AVCaptureDevice) {
+        let candidates = device.formats.filter { fmt in
+            guard fmt.isMultiCamSupported else { return false }
+            let dims = CMVideoFormatDescriptionGetDimensions(fmt.formatDescription)
+            guard dims.width == targetWidth else { return false }
+            return fmt.videoSupportedFrameRateRanges.contains { $0.maxFrameRate >= Float64(fps) }
+        }
+        guard let format = candidates.first else { return }
+        try? device.lockForConfiguration()
+        device.activeFormat = format
+        let dur = CMTime(value: 1, timescale: CMTimeScale(fps))
+        device.activeVideoMinFrameDuration = dur
+        device.activeVideoMaxFrameDuration = dur
+        device.unlockForConfiguration()
     }
 
     // MARK: - Private 配置
