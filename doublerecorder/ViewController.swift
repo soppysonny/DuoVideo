@@ -114,6 +114,8 @@ class ViewController: UIViewController {
                                                name: .recordingsChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(recordMirrorChanged),
                                                name: .recordMirrorChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(pipCameraSettingChanged),
+                                               name: .pipCameraChanged, object: nil)
         setupUI()
         checkSupportAndRequestPermissions()
     }
@@ -664,7 +666,7 @@ class ViewController: UIViewController {
 
         let pipW = shorter * 0.30
         // 用前摄实际宽高比计算容器高度，避免 resizeAspectFill 裁切造成预览与录像不一致
-        let frontAspect = videoRecorder.frontFrameAspect ?? (9.0 / 16.0)
+        let frontAspect = videoRecorder.pipFrameAspect ?? (9.0 / 16.0)
         let pipH = pipW / frontAspect
         pipContainerView.bounds = CGRect(x: 0, y: 0, width: pipW, height: pipH)
         frontPreviewView.frame = pipContainerView.bounds
@@ -897,8 +899,7 @@ class ViewController: UIViewController {
             guard let self else { return }
             switch result {
             case .success:
-                if let bl = mgr.backPreviewLayer  { self.backPreviewView.attachPreviewLayer(bl) }
-                if let fl = mgr.frontPreviewLayer { self.frontPreviewView.attachPreviewLayer(fl) }
+                self.applyPiPCameraSettings()
                 mgr.startRunning()
                 self.applyMirrorState()
                 self.syncOrientationIfNeeded()
@@ -1193,6 +1194,31 @@ class ViewController: UIViewController {
 
     @objc private func recordMirrorChanged() {
         applyMirrorState()
+    }
+
+    @objc private func pipCameraSettingChanged() {
+        applyPiPCameraSettings()
+    }
+
+    private func applyPiPCameraSettings() {
+        let pipIsBack = AppSettings.shared.pipCamera == .back
+        videoRecorder.pipCameraIsBack = pipIsBack
+
+        let bl = cameraManager?.backPreviewLayer
+        let fl = cameraManager?.frontPreviewLayer
+        backPreviewView.detach()
+        frontPreviewView.detach()
+
+        if pipIsBack {
+            if let fl { backPreviewView.attachPreviewLayer(fl) }
+            if let bl { frontPreviewView.attachPreviewLayer(bl) }
+        } else {
+            if let bl { backPreviewView.attachPreviewLayer(bl) }
+            if let fl { frontPreviewView.attachPreviewLayer(fl) }
+        }
+        isSwapped = false
+        applyMirrorState()
+        applyLayout(for: view.bounds.size)
     }
 
     private func applyMirrorState() {

@@ -12,6 +12,7 @@ class SettingsViewController: UIViewController {
 
     private var resTiles: [OptionTile] = []
     private var fpsTiles: [OptionTile] = []
+    private var pipTiles: [OptionTile] = []
 
     // MARK: - Lifecycle
 
@@ -179,6 +180,29 @@ class SettingsViewController: UIViewController {
             fpsRow.addArrangedSubview(tile)
         }
         vStack.addArrangedSubview(fpsRow)
+        vStack.setCustomSpacing(32, after: fpsRow)
+
+        // ── PiP 摄像头 ────────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel("PiP 摄像头"))
+        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
+
+        let pipRow = makePickerRow()
+        let pipOptions: [(String, String, AppSettings.PiPCamera)] = [
+            ("前置", "FRONT",      .front),
+            ("后广角", "BACK WIDE", .back),
+        ]
+        for opt in pipOptions {
+            let tile = OptionTile(title: opt.0, subtitle: opt.1)
+            let cam  = opt.2
+            tile.onTap = { [weak self] in
+                self?.settings.pipCamera = cam
+                self?.syncPipTiles()
+                NotificationCenter.default.post(name: .pipCameraChanged, object: nil)
+            }
+            pipTiles.append(tile)
+            pipRow.addArrangedSubview(tile)
+        }
+        vStack.addArrangedSubview(pipRow)
     }
 
     private func sectionLabel(_ text: String) -> UILabel {
@@ -221,6 +245,7 @@ class SettingsViewController: UIViewController {
         mirrorRow.isOn    = settings.recordMirrored
         syncResTiles()
         syncFpsTiles()
+        syncPipTiles()
     }
 
     private func syncResTiles() {
@@ -231,6 +256,11 @@ class SettingsViewController: UIViewController {
     private func syncFpsTiles() {
         let order: [AppSettings.FrameRate] = [.fps24, .fps30, .fps60]
         for (tile, val) in zip(fpsTiles, order) { tile.isSelected = val == settings.frameRate }
+    }
+
+    private func syncPipTiles() {
+        let order: [AppSettings.PiPCamera] = [.front, .back]
+        for (tile, val) in zip(pipTiles, order) { tile.isSelected = val == settings.pipCamera }
     }
 
     // MARK: - Actions

@@ -37,9 +37,13 @@ class VideoRecorder {
     private(set) var latestBackPixelBuffer:  CVPixelBuffer?
     private(set) var latestFrontPixelBuffer: CVPixelBuffer?
 
-    /// 前摄最新帧的宽高比（宽/高）。未收到帧时返回 nil。
-    var frontFrameAspect: CGFloat? {
-        guard let buf = latestFrontPixelBuffer else { return nil }
+    /// true = 后摄作为 PiP 小窗，前摄铺满背景；false（默认）= 前摄作为 PiP
+    var pipCameraIsBack: Bool = false
+
+    /// PiP 小窗摄像头的宽高比（宽/高）。未收到帧时返回 nil。
+    var pipFrameAspect: CGFloat? {
+        let buf = pipCameraIsBack ? latestBackPixelBuffer : latestFrontPixelBuffer
+        guard let buf else { return nil }
         let h = CVPixelBufferGetHeight(buf)
         guard h > 0 else { return nil }
         return CGFloat(CVPixelBufferGetWidth(buf)) / CGFloat(h)
@@ -234,10 +238,13 @@ class VideoRecorder {
         guard let ox = storedScreenOriginX, let oy = storedScreenOriginY else { return }
         guard let pw = storedScreenPipW else { return }
 
-        let rawBW = overrideBackW  ?? backDimensions?.width
-        let rawBH = overrideBackH  ?? backDimensions?.height
-        let rawFW = overrideFrontW ?? frontDimensions?.width
-        let rawFH = overrideFrontH ?? frontDimensions?.height
+        // 背景/PiP 尺寸取决于 pipCameraIsBack
+        let bgDims  = pipCameraIsBack ? frontDimensions : backDimensions
+        let pipDims = pipCameraIsBack ? backDimensions  : frontDimensions
+        let rawBW = overrideBackW  ?? bgDims?.width
+        let rawBH = overrideBackH  ?? bgDims?.height
+        let rawFW = overrideFrontW ?? pipDims?.width
+        let rawFH = overrideFrontH ?? pipDims?.height
 
         if let bW = rawBW.map(Float.init), let bH = rawBH.map(Float.init), bW > 0, bH > 0 {
             // 预览使用 resizeAspectFill：确定缩放比例和裁切偏移
@@ -294,15 +301,17 @@ class VideoRecorder {
             }
             // 录制前拍照时 compositor 尚未被 tryInitializeWriters 配置，在此按需配置
             if !self.writersInitialized {
-                let bW = CVPixelBufferGetWidth(back)
-                let bH = CVPixelBufferGetHeight(back)
-                let fW = CVPixelBufferGetWidth(front)
-                let fH = CVPixelBufferGetHeight(front)
-                comp.configure(backWidth: bW, backHeight: bH, frontWidth: fW, frontHeight: fH)
-                self.applyScreenLayout(overrideBackW: bW, overrideBackH: bH,
-                                       overrideFrontW: fW, overrideFrontH: fH)
+                let bW = CVPixelBufferGetWidth(back),  bH = CVPixelBufferGetHeight(back)
+                let fW = CVPixelBufferGetWidth(front), fH = CVPixelBufferGetHeight(front)
+                let bgW  = self.pipCameraIsBack ? fW : bW, bgH  = self.pipCameraIsBack ? fH : bH
+                let pipW = self.pipCameraIsBack ? bW : fW, pipH = self.pipCameraIsBack ? bH : fH
+                comp.configure(backWidth: bgW, backHeight: bgH, frontWidth: pipW, frontHeight: pipH)
+                self.applyScreenLayout(overrideBackW: bgW, overrideBackH: bgH,
+                                       overrideFrontW: pipW, overrideFrontH: pipH)
             }
-            let result = comp.composite(backBuffer: back, frontBuffer: front)
+            let bgBuf      = self.pipCameraIsBack ? front : back
+            let overlayBuf = self.pipCameraIsBack ? back  : front
+            let result = comp.composite(backBuffer: bgBuf, frontBuffer: overlayBuf)
             DispatchQueue.main.async { completion(result) }
         }
     }
@@ -318,12 +327,16 @@ class VideoRecorder {
 
         guard compositeWriter != nil || backWriter != nil || frontWriter != nil else { return }
 
-        compositor?.configure(backWidth: back.width, backHeight: back.height,
-                              frontWidth: front.width, frontHeight: front.height)
-        applyScreenLayout()  // 用屏幕坐标精确覆盖 configure 产生的默认 PiP 参数
+        // 背景帧 = pipCameraIsBack ? 前摄 : 后摄；PiP 帧反之
+        let bgW  = pipCameraIsBack ? front.width  : back.width
+        let bgH  = pipCameraIsBack ? front.height : back.height
+        let pipW = pipCameraIsBack ? back.width   : front.width
+        let pipH = pipCameraIsBack ? back.height  : front.height
+        compositor?.configure(backWidth: bgW, backHeight: bgH, frontWidth: pipW, frontHeight: pipH)
+        applyScreenLayout()
 
         if let w = compositeWriter {
-            compositeVideoInput = makeVideoInput(settings: videoSettings(width: back.width, height: back.height))
+            compositeVideoInput = makeVideoInput(settings: videoSettings(width: bgW, height: bgH))
             compositeAudioInput = makeAudioInput()
             if w.canAdd(compositeVideoInput!) { w.add(compositeVideoInput!) }
             if w.canAdd(compositeAudioInput!) { w.add(compositeAudioInput!) }
@@ -372,9 +385,11 @@ class VideoRecorder {
         guard saveComposite,
               let compositor,
               let backBuffer  = CMSampleBufferGetImageBuffer(sampleBuffer),
-              let frontBuffer = latestFrontPixelBuffer,
-              let composed    = compositor.composite(backBuffer: backBuffer, frontBuffer: frontBuffer)
-        else { return }
+              let frontBuffer = latestFrontPixelBuffer else { return }
+
+        let bgBuffer      = pipCameraIsBack ? frontBuffer : backBuffer
+        let overlayBuffer = pipCameraIsBack ? backBuffer  : frontBuffer
+        guard let composed = compositor.composite(backBuffer: bgBuffer, frontBuffer: overlayBuffer) else { return }
 
         appendCompositeFrame(composed, presentationTime: pts)
     }

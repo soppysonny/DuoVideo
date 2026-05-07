@@ -73,6 +73,15 @@ final class AppSettings {
         set { UserDefaults.standard.set(newValue, forKey: "recordMirrored") }
     }
 
+    // MARK: - PiP camera
+
+    enum PiPCamera: String { case front, back }
+
+    var pipCamera: PiPCamera {
+        get { PiPCamera(rawValue: UserDefaults.standard.string(forKey: "pipCamera") ?? "") ?? .front }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "pipCamera") }
+    }
+
     // MARK: - Pro
 
     var isProUser: Bool {
@@ -84,4 +93,5 @@ final class AppSettings {
 extension Notification.Name {
     static let captureModeChanged   = Notification.Name("captureModeChanged")
     static let recordMirrorChanged  = Notification.Name("recordMirrorChanged")
+    static let pipCameraChanged     = Notification.Name("pipCameraChanged")
 }
