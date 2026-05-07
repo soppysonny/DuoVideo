@@ -164,8 +164,10 @@ class CameraManager: NSObject {
         let res = AppSettings.shared.videoResolution
         let fps = AppSettings.shared.frameRate.rawValue
         var lines: [String] = []
+        var minActualFps = fps
         for device in [backDevice, frontDevice].compactMap({ $0 }) {
             let actual = applyFormat(targetWidth: res.targetWidth, fps: fps, to: device)
+            minActualFps = min(minActualFps, actual)
             if actual < fps {
                 let name = device.position == .back ? "后摄" : "前摄"
                 lines.append("\(name)：\(fps)fps → \(actual)fps")
@@ -173,6 +175,9 @@ class CameraManager: NSObject {
         }
         if !lines.isEmpty {
             pendingQualityMessage = "当前设置不完全受支持，已自动调整：\n" + lines.joined(separator: "\n")
+            if let rate = AppSettings.FrameRate(rawValue: minActualFps) {
+                AppSettings.shared.frameRate = rate
+            }
         }
     }
 
@@ -193,6 +198,9 @@ class CameraManager: NSObject {
         }
         session.commitConfiguration()
         pendingQualityMessage = "当前设置超出硬件限制，帧率已自动降至 \(fallbackFps)fps"
+        if let rate = AppSettings.FrameRate(rawValue: fallbackFps) {
+            AppSettings.shared.frameRate = rate
+        }
     }
 
     /// 返回实际应用的帧率

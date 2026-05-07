@@ -907,6 +907,7 @@ class ViewController: UIViewController {
                     self.applyLayout(for: self.view.bounds.size)
                 }
                 mgr.onQualityReduced = { [weak self] message in
+                    self?.syncHUDLabels()
                     self?.showAlert(title: "画质已自动调整", message: message)
                 }
             case .failure(let err):
