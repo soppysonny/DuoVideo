@@ -15,6 +15,7 @@ class ViewController: UIViewController {
     private var isGridOn     = false
     private var isAELocked   = false
     private var isSwapped    = false
+    private var configuredPiPCamera = AppSettings.shared.pipCamera
     private var pipCorner: PiPCorner = .bottomRight
     private var lockedOrientation: AVCaptureVideoOrientation?
     private var recordingSeconds = 0
@@ -127,7 +128,13 @@ class ViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        cameraManager?.startRunning()
+        if #available(iOS 13.0, *),
+           cameraManager != nil,
+           AppSettings.shared.pipCamera != configuredPiPCamera {
+            rebuildCamera()
+        } else {
+            cameraManager?.startRunning()
+        }
         applyMirrorState()
         syncOrientationIfNeeded()
         refreshGalleryBadge()
@@ -891,6 +898,7 @@ class ViewController: UIViewController {
 
     @available(iOS 13.0, *)
     private func setupCamera() {
+        configuredPiPCamera = AppSettings.shared.pipCamera
         let mgr = CameraManager()
         mgr.delegate = self
         cameraManager = mgr
@@ -915,6 +923,18 @@ class ViewController: UIViewController {
                 self.showAlert(title: "摄像头初始化失败", message: err.localizedDescription)
             }
         }
+    }
+
+    @available(iOS 13.0, *)
+    private func rebuildCamera() {
+        cameraManager?.stopRunning()
+        cameraManager = nil
+        backPreviewView.detach()
+        frontPreviewView.detach()
+        isSwapped = false
+        videoRecorder.pipCameraIsBack = false
+        videoRecorder.resetFrameTracking()
+        setupCamera()
     }
 
     // MARK: - Recording
@@ -1153,6 +1173,7 @@ class ViewController: UIViewController {
     @objc private func handleSwap() {
         guard videoRecorder.state != .recording else { return }
         isSwapped.toggle()
+        videoRecorder.pipCameraIsBack = isSwapped
 
         // 先把两个 view 都 detach，再重新 attach。
         // 直接 attach 会因为 CALayer 只能有一个父层，导致第二步把第一步刚添加的层意外移除（黑屏）。
@@ -1201,23 +1222,16 @@ class ViewController: UIViewController {
     }
 
     private func applyPiPCameraSettings() {
-        // pipCamera == .backUltraWide → 后摄进 PiP；.front（默认）→ 前摄进 PiP
-        let pipIsBack = AppSettings.shared.pipCamera == .backUltraWide
-        videoRecorder.pipCameraIsBack = pipIsBack
-
+        // 大窗口（backPreviewView）= 后摄主摄（backPreviewLayer）
+        // 小窗口（frontPreviewView）= PiP 摄像头，即前置或超广角（frontPreviewLayer）
         let bl = cameraManager?.backPreviewLayer
         let fl = cameraManager?.frontPreviewLayer
         backPreviewView.detach()
         frontPreviewView.detach()
-
-        if pipIsBack {
-            if let fl { backPreviewView.attachPreviewLayer(fl) }
-            if let bl { frontPreviewView.attachPreviewLayer(bl) }
-        } else {
-            if let bl { backPreviewView.attachPreviewLayer(bl) }
-            if let fl { frontPreviewView.attachPreviewLayer(fl) }
-        }
+        if let bl { backPreviewView.attachPreviewLayer(bl) }
+        if let fl { frontPreviewView.attachPreviewLayer(fl) }
         isSwapped = false
+        videoRecorder.pipCameraIsBack = false
         applyMirrorState()
         applyLayout(for: view.bounds.size)
     }

@@ -199,6 +199,16 @@ class VideoRecorder {
         }
     }
 
+    /// 切换摄像头配置时调用，清除旧帧缓存和首帧标记，使新相机的首帧能正确触发布局更新。
+    func resetFrameTracking() {
+        writeQueue.async { [weak self] in
+            guard let self else { return }
+            self.latestBackPixelBuffer = nil
+            self.latestFrontPixelBuffer = nil
+            self.didReceiveFirstFrontFrame = false
+        }
+    }
+
     func appendAudioFrame(_ sampleBuffer: CMSampleBuffer) {
         guard state == .recording, !isMicMuted else { return }
         writeQueue.async { [weak self] in

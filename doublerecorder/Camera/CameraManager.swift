@@ -22,6 +22,9 @@ class CameraManager: NSObject {
     private(set) var backPreviewLayer: AVCaptureVideoPreviewLayer?
     private(set) var frontPreviewLayer: AVCaptureVideoPreviewLayer?
 
+    /// false = 前摄在 PiP 槽（默认）；true = 超广角后摄在 PiP 槽
+    private(set) var isUsingFrontCamera: Bool = true
+
     // 设备引用，用于闪光灯 / AE/AF 控制
     private var backDevice:  AVCaptureDevice?
     private var frontDevice: AVCaptureDevice?
@@ -50,6 +53,11 @@ class CameraManager: NSObject {
         AVCaptureMultiCamSession.isMultiCamSupported
     }
 
+    static var isUltraWideMultiCamSupported: Bool {
+        guard AVCaptureMultiCamSession.isMultiCamSupported else { return false }
+        return AVCaptureDevice.default(.builtInUltraWideCamera, for: .video, position: .back) != nil
+    }
+
     // MARK: - 配置
 
     func configure(completion: @escaping (Result<Void, Error>) -> Void) {
@@ -58,7 +66,14 @@ class CameraManager: NSObject {
             do {
                 self.session.beginConfiguration()
                 try self.configureBackCamera()
-                try self.configureFrontCamera()
+                if AppSettings.shared.pipCamera == .backUltraWide && Self.isUltraWideMultiCamSupported {
+                    try self.configureUltraWideCamera()
+                } else {
+                    if AppSettings.shared.pipCamera == .backUltraWide {
+                        AppSettings.shared.pipCamera = .front
+                    }
+                    try self.configureFrontCamera()
+                }
                 try self.configureMicrophone()
                 self.session.commitConfiguration()
                 DispatchQueue.main.async { completion(.success(())) }
@@ -125,8 +140,9 @@ class CameraManager: NSObject {
         }
     }
 
-    /// 前摄预览镜像（仅影响 preview，不影响录制）
+    /// 前摄预览镜像（仅影响 preview，不影响录制；超广角模式下无效）
     func setFrontMirror(_ mirrored: Bool) {
+        guard isUsingFrontCamera else { return }
         DispatchQueue.main.async { [weak self] in
             guard let conn = self?.frontPreviewConnection,
                   conn.isVideoMirroringSupported else { return }
@@ -135,8 +151,9 @@ class CameraManager: NSObject {
         }
     }
 
-    /// 前摄录制镜像（影响数据输出，进而影响所有录制文件）
+    /// 前摄录制镜像（影响数据输出，进而影响所有录制文件；超广角模式下无效）
     func setFrontRecordingMirror(_ mirrored: Bool) {
+        guard isUsingFrontCamera else { return }
         sessionQueue.async { [weak self] in
             guard let conn = self?.frontDataConnection,
                   conn.isVideoMirroringSupported else { return }
@@ -287,12 +304,68 @@ class CameraManager: NSObject {
         DispatchQueue.main.async { self.backPreviewLayer = previewLayer }
     }
 
+    private func configureUltraWideCamera() throws {
+        guard let device = AVCaptureDevice.default(.builtInUltraWideCamera,
+                                                   for: .video, position: .back) else {
+            throw CameraError.deviceUnavailable("超广角摄像头不可用")
+        }
+        frontDevice = device
+        isUsingFrontCamera = false
+        let input = try AVCaptureDeviceInput(device: device)
+        guard session.canAddInput(input) else {
+            throw CameraError.cannotAddInput("无法添加超广角 input")
+        }
+        session.addInputWithNoConnections(input)
+
+        frontVideoOutput.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+        ]
+        frontVideoOutput.alwaysDiscardsLateVideoFrames = true
+        frontVideoOutput.setSampleBufferDelegate(self, queue: frontOutputQueue)
+        guard session.canAddOutput(frontVideoOutput) else {
+            throw CameraError.cannotAddOutput("无法添加超广角 output")
+        }
+        session.addOutputWithNoConnections(frontVideoOutput)
+
+        guard let inputPort = input.ports(for: .video,
+                                          sourceDeviceType: device.deviceType,
+                                          sourceDevicePosition: .back).first else {
+            throw CameraError.cannotAddInput("无法获取超广角 port")
+        }
+        let connection = AVCaptureConnection(inputPorts: [inputPort], output: frontVideoOutput)
+        guard session.canAddConnection(connection) else {
+            throw CameraError.cannotAddInput("无法建立超广角连接")
+        }
+        session.addConnection(connection)
+        connection.videoOrientation = .portrait
+        frontDataConnection = connection
+        if connection.isVideoMirroringSupported {
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = false
+        }
+
+        let previewLayer = AVCaptureVideoPreviewLayer()
+        previewLayer.setSessionWithNoConnection(session)
+        let previewConnection = AVCaptureConnection(inputPort: inputPort, videoPreviewLayer: previewLayer)
+        guard session.canAddConnection(previewConnection) else { return }
+        session.addConnection(previewConnection)
+        previewConnection.videoOrientation = .portrait
+        frontPreviewConnection = previewConnection
+        if previewConnection.isVideoMirroringSupported {
+            previewConnection.automaticallyAdjustsVideoMirroring = false
+            previewConnection.isVideoMirrored = false
+        }
+        previewLayer.videoGravity = .resizeAspectFill
+        DispatchQueue.main.async { self.frontPreviewLayer = previewLayer }
+    }
+
     private func configureFrontCamera() throws {
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera,
                                                    for: .video, position: .front) else {
             throw CameraError.deviceUnavailable("前置摄像头不可用")
         }
         frontDevice = device
+        isUsingFrontCamera = true
         let input = try AVCaptureDeviceInput(device: device)
         guard session.canAddInput(input) else {
             throw CameraError.cannotAddInput("无法添加前摄 input")
