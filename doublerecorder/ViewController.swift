@@ -81,7 +81,6 @@ class ViewController: UIViewController {
 
     // MARK: - Bottom dock
 
-    private let bottomDockView  = UIView()
     private let galleryThumb    = UIView()
     private let galleryCountLbl = UILabel()
     private let recordButton    = RecordButtonView()
@@ -423,8 +422,6 @@ class ViewController: UIViewController {
     // MARK: - Bottom Dock Setup
 
     private func setupBottomDock() {
-        view.addSubview(bottomDockView)
-
         // Gallery thumbnail
         galleryThumb.backgroundColor = UIColor(red: 0.1, green: 0.067, blue: 0.05, alpha: 1)
         galleryThumb.layer.cornerRadius = 10
@@ -433,7 +430,7 @@ class ViewController: UIViewController {
         galleryThumb.isUserInteractionEnabled = true
         let tapGallery = UITapGestureRecognizer(target: self, action: #selector(handleGallery))
         galleryThumb.addGestureRecognizer(tapGallery)
-        bottomDockView.addSubview(galleryThumb)
+        view.addSubview(galleryThumb)
 
         // "3" badge
         galleryCountLbl.text = "0"
@@ -452,25 +449,25 @@ class ViewController: UIViewController {
         galleryLbl.font = UIFont.monospacedSystemFont(ofSize: 8, weight: .semibold)
         galleryLbl.textColor = UIColor.white.withAlphaComponent(0.38)
         galleryLbl.tag = 701
-        bottomDockView.addSubview(galleryLbl)
+        view.addSubview(galleryLbl)
 
         // Record button
         recordButton.addTarget(self, action: #selector(recordButtonTapped), for: .touchUpInside)
-        bottomDockView.addSubview(recordButton)
+        view.addSubview(recordButton)
 
         // Swap button
         let swapIcon = UIImage(systemName: "arrow.triangle.2.circlepath.camera.fill")
         swapBtn.setImage(swapIcon, for: .normal)
         swapBtn.tintColor = .white
         swapBtn.addTarget(self, action: #selector(handleSwap), for: .touchUpInside)
-        bottomDockView.addSubview(swapBtn)
+        view.addSubview(swapBtn)
 
         let swapLbl = UILabel()
         swapLbl.text = "SWAP"
         swapLbl.font = UIFont.monospacedSystemFont(ofSize: 8, weight: .semibold)
         swapLbl.textColor = UIColor.white.withAlphaComponent(0.38)
         swapLbl.tag = 702
-        bottomDockView.addSubview(swapLbl)
+        view.addSubview(swapLbl)
     }
 
     // MARK: - Audio Meter Setup
@@ -644,48 +641,46 @@ class ViewController: UIViewController {
             // Right column
             let dockW: CGFloat = 110
             let dockH = size.height
-            bottomDockView.frame = CGRect(x: size.width - safe.right - dockW, y: 0,
-                                          width: dockW, height: dockH)
-            let cx = dockW / 2
+            let dockX = size.width - safe.right - dockW
+            let cx = dockX + dockW / 2
             let padV: CGFloat = 40
             // Record in center
-            recordButton.frame = CGRect(x: (dockW - recSize) / 2, y: (dockH - recSize) / 2,
+            recordButton.frame = CGRect(x: dockX + (dockW - recSize) / 2, y: (dockH - recSize) / 2,
                                         width: recSize, height: recSize)
             // Gallery top
-            galleryThumb.frame = CGRect(x: cx - auxSize / 2, y: padV, width: auxSize, height: auxSize)
+            galleryThumb.frame = CGRect(x: dockX + (dockW - auxSize) / 2, y: padV, width: auxSize, height: auxSize)
             galleryCountLbl.frame = CGRect(x: auxSize - 14 - 2, y: auxSize - 14 - 2, width: 14, height: 14)
-            if let lbl = bottomDockView.viewWithTag(701) as? UILabel {
+            if let lbl = view.viewWithTag(701) as? UILabel {
                 lbl.sizeToFit()
                 lbl.center = CGPoint(x: cx, y: galleryThumb.frame.maxY + 8)
             }
             // Swap bottom
-            swapBtn.frame = CGRect(x: cx - auxSize / 2, y: dockH - padV - auxSize, width: auxSize, height: auxSize)
+            swapBtn.frame = CGRect(x: dockX + (dockW - auxSize) / 2, y: dockH - padV - auxSize, width: auxSize, height: auxSize)
             swapBtn.layer.cornerRadius = auxSize / 2
-            if let lbl = bottomDockView.viewWithTag(702) as? UILabel {
+            if let lbl = view.viewWithTag(702) as? UILabel {
                 lbl.sizeToFit()
                 lbl.center = CGPoint(x: cx, y: swapBtn.frame.maxY + 8)
             }
         } else {
             // Bottom row
             let dockH: CGFloat = 138
-            bottomDockView.frame = CGRect(x: 0, y: size.height - safe.bottom - dockH,
-                                          width: size.width, height: dockH + safe.bottom)
-            let cy = dockH / 2
+            let dockY = size.height - safe.bottom - dockH
+            let cy = dockY + dockH / 2
             let padH: CGFloat = 40
             // Record center
-            recordButton.frame = CGRect(x: (size.width - recSize) / 2, y: (dockH - recSize) / 2,
+            recordButton.frame = CGRect(x: (size.width - recSize) / 2, y: dockY + (dockH - recSize) / 2,
                                         width: recSize, height: recSize)
             // Gallery left
             galleryThumb.frame = CGRect(x: padH, y: cy - auxSize / 2, width: auxSize, height: auxSize)
             galleryCountLbl.frame = CGRect(x: auxSize - 14 - 2, y: auxSize - 14 - 2, width: 14, height: 14)
-            if let lbl = bottomDockView.viewWithTag(701) as? UILabel {
+            if let lbl = view.viewWithTag(701) as? UILabel {
                 lbl.sizeToFit()
                 lbl.center = CGPoint(x: galleryThumb.center.x, y: galleryThumb.frame.maxY + 8)
             }
             // Swap right
             swapBtn.frame = CGRect(x: size.width - padH - auxSize, y: cy - auxSize / 2, width: auxSize, height: auxSize)
             swapBtn.layer.cornerRadius = auxSize / 2
-            if let lbl = bottomDockView.viewWithTag(702) as? UILabel {
+            if let lbl = view.viewWithTag(702) as? UILabel {
                 lbl.sizeToFit()
                 lbl.center = CGPoint(x: swapBtn.center.x, y: swapBtn.frame.maxY + 8)
             }
@@ -1102,8 +1097,8 @@ class ViewController: UIViewController {
             self.sideToolbarBlur.alpha = alpha
             self.galleryThumb.alpha    = alpha
             self.swapBtn.alpha         = alpha
-            if let lbl = self.bottomDockView.viewWithTag(701) { lbl.alpha = alpha }
-            if let lbl = self.bottomDockView.viewWithTag(702) { lbl.alpha = alpha }
+            if let lbl = self.view.viewWithTag(701) { lbl.alpha = alpha }
+            if let lbl = self.view.viewWithTag(702) { lbl.alpha = alpha }
         }, completion: { _ in
             if !rec { self.applyOverlapFade() }
         })
