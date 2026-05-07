@@ -16,6 +16,7 @@ class RecordingsListViewController: UIViewController {
 
         var displayTitle: String {
             let df = DateFormatter()
+            df.locale = Locale(identifier: "en_US_POSIX")
             df.dateFormat = "MM-dd  HH:mm:ss"
             return df.string(from: date)
         }
@@ -164,6 +165,7 @@ class RecordingsListViewController: UIViewController {
 
     private static func parseDate(_ ts: String) -> Date? {
         let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
         df.dateFormat = "yyyyMMddHHmmss"
         return df.date(from: ts)
     }
