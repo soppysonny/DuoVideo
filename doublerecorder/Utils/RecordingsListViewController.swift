@@ -60,12 +60,26 @@ class RecordingsListViewController: UIViewController {
                 sheet.preferredCornerRadius = 20
             }
         }
-        modalPresentationStyle = .automatic
+        modalPresentationStyle = .fullScreen
     }
 
     // MARK: - Build UI
 
     private func buildUI() {
+        let closeBtn = UIButton(type: .system)
+        closeBtn.setImage(UIImage(systemName: "xmark"), for: .normal)
+        closeBtn.tintColor = UIColor.white.withAlphaComponent(0.55)
+        closeBtn.translatesAutoresizingMaskIntoConstraints = false
+        closeBtn.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+        view.addSubview(closeBtn)
+
+        NSLayoutConstraint.activate([
+            closeBtn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            closeBtn.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            closeBtn.widthAnchor.constraint(equalToConstant: 30),
+            closeBtn.heightAnchor.constraint(equalToConstant: 30),
+        ])
+
         titleLabel.font      = UIFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
         titleLabel.textColor = UIColor.white.withAlphaComponent(0.50)
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -89,18 +103,20 @@ class RecordingsListViewController: UIViewController {
         view.addSubview(emptyLabel)
 
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: 20),
+            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 14),
             titleLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
             tableView.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tableView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            tableView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
 
             emptyLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             emptyLabel.centerYAnchor.constraint(equalTo: view.centerYAnchor),
         ])
     }
+
+    @objc private func closeTapped() { dismiss(animated: true) }
 
     // MARK: - Load
 
@@ -199,10 +215,7 @@ extension RecordingsListViewController: UITableViewDataSource, UITableViewDelega
         if record.isPhoto {
             present(PhotoViewerController(url: record.url), animated: true)
         } else {
-            let player = AVPlayer(url: record.url)
-            let vc = AVPlayerViewController()
-            vc.player = player
-            present(vc, animated: true) { player.play() }
+            present(VideoPlayerViewController(url: record.url), animated: true)
         }
     }
 
@@ -212,6 +225,7 @@ extension RecordingsListViewController: UITableViewDataSource, UITableViewDelega
             guard let self else { done(false); return }
             let record = self.records.remove(at: indexPath.row)
             try? FileManager.default.removeItem(at: record.url)
+            ThumbnailCache.shared.remove(key: record.filename)
             tableView.deleteRows(at: [indexPath], with: .automatic)
             self.refresh()
             NotificationCenter.default.post(name: .recordingsChanged, object: nil)
@@ -371,18 +385,41 @@ private final class VideoCell: UITableViewCell {
 
         thumbImgView.image = nil
         thumbTask?.cancel()
+        thumbTask = nil
 
         let badgeCfg = UIImage.SymbolConfiguration(pointSize: 8, weight: .medium)
         let badgeIconName = record.isPhoto ? "photo.fill" : "video.fill"
         mediaTypeIcon.image = UIImage(systemName: badgeIconName, withConfiguration: badgeCfg)
 
         let url = record.url
+        let cacheKey = record.filename
+
+        // 先命中缓存，直接显示
+        if let cached = ThumbnailCache.shared.get(key: cacheKey) {
+            thumbImgView.image = cached
+            playIcon.isHidden  = true
+            return
+        }
+
         if record.isPhoto {
             playIcon.isHidden = true
             let task = DispatchWorkItem { [weak self] in
-                guard let data = try? Data(contentsOf: url), let img = UIImage(data: data) else { return }
+                guard let data = try? Data(contentsOf: url),
+                      let img = UIImage(data: data) else { return }
+                // 缩小为缩略图尺寸再缓存
+                let thumb: UIImage
+                if #available(iOS 15.0, *) {
+                    thumb = img.preparingThumbnail(of: CGSize(width: 160, height: 116)) ?? img
+                } else {
+                    let size = CGSize(width: 160, height: 116)
+                    UIGraphicsBeginImageContextWithOptions(size, false, 0)
+                    img.draw(in: CGRect(origin: .zero, size: size))
+                    thumb = UIGraphicsGetImageFromCurrentImageContext() ?? img
+                    UIGraphicsEndImageContext()
+                }
+                ThumbnailCache.shared.set(thumb, key: cacheKey)
                 DispatchQueue.main.async { [weak self] in
-                    self?.thumbImgView.image = img
+                    self?.thumbImgView.image = thumb
                 }
             }
             thumbTask = task
@@ -395,6 +432,7 @@ private final class VideoCell: UITableViewCell {
                 gen.maximumSize = CGSize(width: 160, height: 116)
                 guard let cg = try? gen.copyCGImage(at: .zero, actualTime: nil) else { return }
                 let img = UIImage(cgImage: cg)
+                ThumbnailCache.shared.set(img, key: cacheKey)
                 DispatchQueue.main.async { [weak self] in
                     self?.thumbImgView.image = img
                     self?.playIcon.isHidden  = true
@@ -408,6 +446,49 @@ private final class VideoCell: UITableViewCell {
 
 extension Notification.Name {
     static let recordingsChanged = Notification.Name("recordingsChanged")
+}
+
+// MARK: - Thumbnail Cache (memory + disk, JPEG compressed)
+
+final class ThumbnailCache {
+    static let shared = ThumbnailCache()
+    private init() {}
+
+    private let memory = NSCache<NSString, UIImage>()
+    private let diskQueue = DispatchQueue(label: "com.mbjztech.thumbcache", qos: .utility)
+    private var diskDir: URL = {
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ThumbnailCache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    func get(key: String) -> UIImage? {
+        if let img = memory.object(forKey: key as NSString) { return img }
+        let path = diskDir.appendingPathComponent(key + ".jpg").path
+        if let data = FileManager.default.contents(atPath: path), let img = UIImage(data: data) {
+            memory.setObject(img, forKey: key as NSString)
+            return img
+        }
+        return nil
+    }
+
+    func set(_ image: UIImage, key: String) {
+        memory.setObject(image, forKey: key as NSString)
+        let url = diskDir.appendingPathComponent(key + ".jpg")
+        diskQueue.async {
+            if let data = image.jpegData(compressionQuality: 0.72) {
+                try? data.write(to: url, options: .atomic)
+            }
+        }
+    }
+
+    func remove(key: String) {
+        memory.removeObject(forKey: key as NSString)
+        diskQueue.async { [diskDir] in
+            try? FileManager.default.removeItem(at: diskDir.appendingPathComponent(key + ".jpg"))
+        }
+    }
 }
 
 // MARK: - Photo Viewer
@@ -444,4 +525,222 @@ private final class PhotoViewerController: UIViewController {
     override var prefersStatusBarHidden: Bool { true }
 
     @objc private func closeTapped() { dismiss(animated: true) }
+}
+
+// MARK: - Video Player (AVPlayerLayer-based, no system chrome)
+
+final class VideoPlayerViewController: UIViewController {
+
+    private let playerLayer = AVPlayerLayer()
+    private var player: AVPlayer?
+    private var timeObserver: Any?
+
+    // Controls
+    private let controlsView  = UIView()
+    private let playPauseBtn  = UIButton(type: .system)
+    private let scrubber      = UISlider()
+    private let currentTimeLbl = UILabel()
+    private let totalTimeLbl   = UILabel()
+    private let closeBtn       = UIButton(type: .system)
+    private var hideControlsTimer: Timer?
+    private var isScrubbing = false
+
+    init(url: URL) {
+        super.init(nibName: nil, bundle: nil)
+        modalPresentationStyle = .fullScreen
+        let asset = AVURLAsset(url: url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: false])
+        let item  = AVPlayerItem(asset: asset)
+        player = AVPlayer(playerItem: item)
+        playerLayer.player       = player
+        playerLayer.videoGravity = .resizeAspect
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+
+        // Player layer
+        playerLayer.frame = view.bounds
+        view.layer.addSublayer(playerLayer)
+
+        // Tap to toggle controls
+        let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        view.addGestureRecognizer(tap)
+
+        buildControls()
+        addTimeObserver()
+        scheduleHideControls()
+        player?.play()
+
+        NotificationCenter.default.addObserver(self, selector: #selector(playerDidEnd),
+                                               name: .AVPlayerItemDidPlayToEndTime,
+                                               object: player?.currentItem)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        playerLayer.frame = view.bounds
+        let safe = view.safeAreaInsets
+        let cH: CGFloat = 80
+        controlsView.frame = CGRect(x: 0, y: view.bounds.height - safe.bottom - cH,
+                                    width: view.bounds.width, height: cH)
+        closeBtn.frame = CGRect(x: safe.left + 16, y: safe.top + 12, width: 36, height: 36)
+    }
+
+    override var prefersStatusBarHidden: Bool { true }
+
+    private func buildControls() {
+        // Semi-transparent bottom bar
+        let blur = UIVisualEffectView(effect: UIBlurEffect(style: .systemMaterialDark))
+        blur.frame = CGRect(x: 0, y: 0, width: view.bounds.width, height: 80)
+        blur.autoresizingMask = [.flexibleWidth]
+        controlsView.addSubview(blur)
+        view.addSubview(controlsView)
+
+        // Play/pause
+        let cfg = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+        playPauseBtn.setImage(UIImage(systemName: "pause.fill", withConfiguration: cfg), for: .normal)
+        playPauseBtn.tintColor = .white
+        playPauseBtn.translatesAutoresizingMaskIntoConstraints = false
+        playPauseBtn.addTarget(self, action: #selector(togglePlayPause), for: .touchUpInside)
+        controlsView.addSubview(playPauseBtn)
+
+        // Scrubber
+        scrubber.minimumTrackTintColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 1)
+        scrubber.maximumTrackTintColor = UIColor.white.withAlphaComponent(0.25)
+        scrubber.thumbTintColor        = .white
+        scrubber.translatesAutoresizingMaskIntoConstraints = false
+        scrubber.addTarget(self, action: #selector(scrubberChanged), for: .valueChanged)
+        scrubber.addTarget(self, action: #selector(scrubberTouchDown), for: .touchDown)
+        scrubber.addTarget(self, action: #selector(scrubberTouchUp), for: [.touchUpInside, .touchUpOutside])
+        controlsView.addSubview(scrubber)
+
+        let timeFontSize: CGFloat = 10
+        for lbl in [currentTimeLbl, totalTimeLbl] {
+            lbl.font      = UIFont.monospacedDigitSystemFont(ofSize: timeFontSize, weight: .regular)
+            lbl.textColor = UIColor.white.withAlphaComponent(0.7)
+            lbl.translatesAutoresizingMaskIntoConstraints = false
+            controlsView.addSubview(lbl)
+        }
+        currentTimeLbl.text = "0:00"
+        totalTimeLbl.text   = "0:00"
+
+        // Close button
+        let closeCfg = UIImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+        closeBtn.setImage(UIImage(systemName: "xmark", withConfiguration: closeCfg), for: .normal)
+        closeBtn.tintColor       = UIColor.white.withAlphaComponent(0.8)
+        closeBtn.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+        closeBtn.layer.cornerRadius = 18
+        closeBtn.clipsToBounds = true
+        closeBtn.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+        view.addSubview(closeBtn)
+
+        NSLayoutConstraint.activate([
+            playPauseBtn.leadingAnchor.constraint(equalTo: controlsView.leadingAnchor, constant: 16),
+            playPauseBtn.centerYAnchor.constraint(equalTo: controlsView.centerYAnchor),
+            playPauseBtn.widthAnchor.constraint(equalToConstant: 36),
+            playPauseBtn.heightAnchor.constraint(equalToConstant: 36),
+
+            currentTimeLbl.leadingAnchor.constraint(equalTo: playPauseBtn.trailingAnchor, constant: 8),
+            currentTimeLbl.centerYAnchor.constraint(equalTo: controlsView.centerYAnchor),
+
+            totalTimeLbl.trailingAnchor.constraint(equalTo: controlsView.trailingAnchor, constant: -16),
+            totalTimeLbl.centerYAnchor.constraint(equalTo: controlsView.centerYAnchor),
+
+            scrubber.leadingAnchor.constraint(equalTo: currentTimeLbl.trailingAnchor, constant: 6),
+            scrubber.trailingAnchor.constraint(equalTo: totalTimeLbl.leadingAnchor, constant: -6),
+            scrubber.centerYAnchor.constraint(equalTo: controlsView.centerYAnchor),
+        ])
+
+        // Fetch total duration asynchronously
+        player?.currentItem?.asset.loadValuesAsynchronously(forKeys: ["duration"]) { [weak self] in
+            DispatchQueue.main.async {
+                guard let self,
+                      let dur = self.player?.currentItem?.asset.duration,
+                      dur.isNumeric else { return }
+                self.totalTimeLbl.text = Self.formatTime(CMTimeGetSeconds(dur))
+            }
+        }
+    }
+
+    private func addTimeObserver() {
+        let interval = CMTime(seconds: 0.25, preferredTimescale: 600)
+        timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            guard let self, !self.isScrubbing else { return }
+            let secs    = CMTimeGetSeconds(time)
+            let durSecs = CMTimeGetSeconds(self.player?.currentItem?.duration ?? .zero)
+            self.currentTimeLbl.text = Self.formatTime(secs)
+            if durSecs > 0 { self.scrubber.value = Float(secs / durSecs) }
+            let isPlaying = self.player?.timeControlStatus == .playing
+            let iconName  = isPlaying ? "pause.fill" : "play.fill"
+            let cfg = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+            self.playPauseBtn.setImage(UIImage(systemName: iconName, withConfiguration: cfg), for: .normal)
+        }
+    }
+
+    private func scheduleHideControls() {
+        hideControlsTimer?.invalidate()
+        hideControlsTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+            UIView.animate(withDuration: 0.3) { self?.controlsView.alpha = 0; self?.closeBtn.alpha = 0 }
+        }
+    }
+
+    private static func formatTime(_ secs: Double) -> String {
+        guard secs.isFinite && secs >= 0 else { return "0:00" }
+        let s = Int(secs)
+        let m = s / 60
+        return "\(m):\(String(format: "%02d", s % 60))"
+    }
+
+    // MARK: - Actions
+
+    @objc private func handleTap() {
+        let hidden = controlsView.alpha < 0.5
+        UIView.animate(withDuration: 0.2) {
+            self.controlsView.alpha = hidden ? 1 : 0
+            self.closeBtn.alpha     = hidden ? 1 : 0
+        }
+        if hidden { scheduleHideControls() }
+    }
+
+    @objc private func togglePlayPause() {
+        guard let player else { return }
+        if player.timeControlStatus == .playing { player.pause() }
+        else { player.play() }
+        scheduleHideControls()
+    }
+
+    @objc private func scrubberTouchDown() { isScrubbing = true; hideControlsTimer?.invalidate() }
+
+    @objc private func scrubberChanged() {
+        guard let dur = player?.currentItem?.duration, dur.isNumeric else { return }
+        let secs = Double(scrubber.value) * CMTimeGetSeconds(dur)
+        currentTimeLbl.text = Self.formatTime(secs)
+    }
+
+    @objc private func scrubberTouchUp() {
+        guard let dur = player?.currentItem?.duration, dur.isNumeric else { isScrubbing = false; return }
+        let secs   = Double(scrubber.value) * CMTimeGetSeconds(dur)
+        let target = CMTime(seconds: secs, preferredTimescale: 600)
+        player?.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            self?.isScrubbing = false
+        }
+        scheduleHideControls()
+    }
+
+    @objc private func playerDidEnd() {
+        player?.seek(to: .zero)
+        let cfg = UIImage.SymbolConfiguration(pointSize: 22, weight: .medium)
+        playPauseBtn.setImage(UIImage(systemName: "play.fill", withConfiguration: cfg), for: .normal)
+        UIView.animate(withDuration: 0.2) { self.controlsView.alpha = 1; self.closeBtn.alpha = 1 }
+        hideControlsTimer?.invalidate()
+    }
+
+    @objc private func closeTapped() { dismiss(animated: true) }
+
+    deinit {
+        if let obs = timeObserver { player?.removeTimeObserver(obs) }
+        NotificationCenter.default.removeObserver(self)
+    }
 }
