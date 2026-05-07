@@ -140,7 +140,6 @@ class ViewController: UIViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        cameraManager?.stopRunning()
     }
 
     @objc private func deviceOrientationChanged() {
@@ -1205,6 +1204,7 @@ class ViewController: UIViewController {
     }
 
     @objc private func handleSettings() {
+        cameraManager?.stopRunning()
         let vc = SettingsViewController()
         vc.modalPresentationStyle = .fullScreen
         present(vc, animated: true)
@@ -1219,7 +1219,6 @@ class ViewController: UIViewController {
     }
 
     @objc private func handleGallery() {
-        cameraManager?.stopRunning()
         let vc = RecordingsListViewController()
         present(vc, animated: true)
     }

@@ -67,7 +67,7 @@ class CameraManager: NSObject {
 
     func startRunning() {
         sessionQueue.async { [weak self] in
-            guard let self else { return }
+            guard let self, !self.session.isRunning else { return }
             self.session.beginConfiguration()
             self.applyFormatSettings()
             self.session.commitConfiguration()

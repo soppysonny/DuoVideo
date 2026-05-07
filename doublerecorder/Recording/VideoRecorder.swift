@@ -399,6 +399,7 @@ enum RecorderError: LocalizedError {
 private extension DateFormatter {
     static let fileTimestamp: DateFormatter = {
         let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyyMMddHHmmss"
         return f
     }()
