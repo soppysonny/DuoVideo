@@ -663,7 +663,9 @@ class ViewController: UIViewController {
         guard !pipIsDragging else { return }
 
         let pipW = shorter * 0.30
-        let pipH = pipW * 4.0 / 3.0
+        // 用前摄实际宽高比计算容器高度，避免 resizeAspectFill 裁切造成预览与录像不一致
+        let frontAspect = videoRecorder.frontFrameAspect ?? (9.0 / 16.0)
+        let pipH = pipW / frontAspect
         pipContainerView.bounds = CGRect(x: 0, y: 0, width: pipW, height: pipH)
         frontPreviewView.frame = pipContainerView.bounds
 
@@ -900,6 +902,10 @@ class ViewController: UIViewController {
                 mgr.startRunning()
                 self.applyMirrorState()
                 self.syncOrientationIfNeeded()
+                self.videoRecorder.onFirstFrontFrame = { [weak self] in
+                    guard let self else { return }
+                    self.applyLayout(for: self.view.bounds.size)
+                }
             case .failure(let err):
                 self.showAlert(title: "摄像头初始化失败", message: err.localizedDescription)
             }

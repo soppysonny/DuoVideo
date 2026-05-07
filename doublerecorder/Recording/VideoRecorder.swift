@@ -37,6 +37,18 @@ class VideoRecorder {
     private(set) var latestBackPixelBuffer:  CVPixelBuffer?
     private(set) var latestFrontPixelBuffer: CVPixelBuffer?
 
+    /// 前摄最新帧的宽高比（宽/高）。未收到帧时返回 nil。
+    var frontFrameAspect: CGFloat? {
+        guard let buf = latestFrontPixelBuffer else { return nil }
+        let h = CVPixelBufferGetHeight(buf)
+        guard h > 0 else { return nil }
+        return CGFloat(CVPixelBufferGetWidth(buf)) / CGFloat(h)
+    }
+
+    /// 首次收到前摄帧时在主线程回调一次（用于更新依赖实际宽高比的布局）。
+    var onFirstFrontFrame: (() -> Void)?
+    private var didReceiveFirstFrontFrame = false
+
     private var sessionStartTime: CMTime = .invalid
     private var writersInitialized = false
 
@@ -154,7 +166,15 @@ class VideoRecorder {
             guard let self else { return }
 
             if let pb = CMSampleBufferGetImageBuffer(sampleBuffer) {
+                let isFirst = self.latestFrontPixelBuffer == nil && !self.didReceiveFirstFrontFrame
                 self.latestFrontPixelBuffer = pb
+                if isFirst {
+                    self.didReceiveFirstFrontFrame = true
+                    DispatchQueue.main.async { [weak self] in
+                        self?.onFirstFrontFrame?()
+                        self?.onFirstFrontFrame = nil
+                    }
+                }
             }
 
             guard self.state == .waitingForDimensions || self.state == .recording else { return }
