@@ -153,8 +153,10 @@ class CameraManager: NSObject {
     private func applyFormatSettings() {
         let res = AppSettings.shared.videoResolution
         let fps = AppSettings.shared.frameRate.rawValue
+        // MultiCam 1080p 硬件预算不足以支持双路 60fps，上限 30fps
+        let effectiveFps = (res == .hd1080 && fps > 30) ? 30 : fps
         for device in [backDevice, frontDevice].compactMap({ $0 }) {
-            applyFormat(targetWidth: res.targetWidth, fps: fps, to: device)
+            applyFormat(targetWidth: res.targetWidth, fps: effectiveFps, to: device)
         }
     }
 
