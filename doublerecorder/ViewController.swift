@@ -79,7 +79,7 @@ class ViewController: UIViewController {
 
     // MARK: - Bottom dock
 
-    private let galleryThumb    = UIView()
+    private let galleryThumb    = UIImageView()
     private let galleryCountLbl = UILabel()
     private let recordButton    = RecordButtonView()
     private let swapBtn: UIButton = {
@@ -426,6 +426,8 @@ class ViewController: UIViewController {
         galleryThumb.layer.cornerRadius = 10
         galleryThumb.layer.borderWidth = 0.5
         galleryThumb.layer.borderColor = UIColor.white.withAlphaComponent(0.18).cgColor
+        galleryThumb.contentMode = .scaleAspectFill
+        galleryThumb.clipsToBounds = true
         galleryThumb.isUserInteractionEnabled = true
         let tapGallery = UITapGestureRecognizer(target: self, action: #selector(handleGallery))
         galleryThumb.addGestureRecognizer(tapGallery)
@@ -1032,6 +1034,47 @@ class ViewController: UIViewController {
         let count = RecordingsListViewController.sessionCount()
         galleryCountLbl.isHidden = count == 0
         galleryCountLbl.text     = "\(min(count, 99))"
+        refreshGalleryThumbnail()
+    }
+
+    private func refreshGalleryThumbnail() {
+        let dir = RecordingsListViewController.recordingsDirectory()
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.contentModificationDateKey], options: .skipsHiddenFiles
+        ) else { return }
+        let filtered = files.filter { ["mp4", "jpg"].contains($0.pathExtension.lowercased()) }
+        guard let latest = filtered.max(by: {
+            let d1 = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let d2 = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return d1 < d2
+        }) else {
+            galleryThumb.image = nil
+            return
+        }
+        let cacheKey = latest.deletingPathExtension().lastPathComponent
+        if let cached = ThumbnailCache.shared.get(key: cacheKey) {
+            galleryThumb.image = cached
+            return
+        }
+        let url = latest
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            var thumb: UIImage?
+            if url.pathExtension.lowercased() == "jpg" {
+                thumb = UIImage(contentsOfFile: url.path)
+            } else {
+                let asset = AVURLAsset(url: url)
+                let gen = AVAssetImageGenerator(asset: asset)
+                gen.appliesPreferredTrackTransform = true
+                gen.maximumSize = CGSize(width: 120, height: 120)
+                if let cgImg = try? gen.copyCGImage(at: .zero, actualTime: nil) {
+                    thumb = UIImage(cgImage: cgImg)
+                }
+            }
+            if let thumb {
+                ThumbnailCache.shared.set(thumb, key: cacheKey)
+                DispatchQueue.main.async { self?.galleryThumb.image = thumb }
+            }
+        }
     }
 
     // MARK: - Timer / DisplayLink
