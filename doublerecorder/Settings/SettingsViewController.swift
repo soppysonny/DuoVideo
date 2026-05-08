@@ -364,15 +364,20 @@ class SettingsViewController: UIViewController {
         btn.layer.borderWidth  = 0.5
         btn.layer.borderColor  = UIColor.white.withAlphaComponent(0.14).cgColor
         btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.contentHorizontalAlignment = .center
 
         let cfg = UIImage.SymbolConfiguration(pointSize: 11, weight: .medium)
         let img = UIImage(systemName: icon, withConfiguration: cfg)
         btn.setImage(img, for: .normal)
         btn.tintColor = .white
 
-        btn.setTitle("  \(title)", for: .normal)
+        btn.setTitle(title, for: .normal)
         btn.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
         btn.setTitleColor(.white, for: .normal)
+
+        // 图标与标题间距 6pt，整体居中
+        btn.imageEdgeInsets = UIEdgeInsets(top: 0, left: -4, bottom: 0, right: 4)
+        btn.titleEdgeInsets = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: -4)
         return btn
     }
 
