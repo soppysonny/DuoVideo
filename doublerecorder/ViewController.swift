@@ -92,6 +92,16 @@ class ViewController: UIViewController {
         return b
     }()
 
+    private let pipDockBtn: UIButton = {
+        let b = UIButton(type: .custom)
+        b.backgroundColor = UIColor(white: 0.08, alpha: 0.6)
+        b.layer.cornerRadius = 22
+        b.layer.borderWidth = 0.5
+        b.layer.borderColor = UIColor.white.withAlphaComponent(0.18).cgColor
+        b.tintColor = .white
+        return b
+    }()
+
     // MARK: - Audio meter (portrait)
 
     private let meterPillView = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
@@ -396,7 +406,6 @@ class ViewController: UIViewController {
 
         for (btn, sel) in [
             (flashBtn,    #selector(handleFlash)),
-            (pipCamBtn,   #selector(handlePiPCam)),
             (mirrorBtn,   #selector(handleMirror)),
             (gridBtn,     #selector(handleGrid)),
             (aeLockBtn,   #selector(handleAELock)),
@@ -409,8 +418,6 @@ class ViewController: UIViewController {
         // Initial active state driven by AppSettings
         mirrorBtn.isActive    = AppSettings.shared.recordMirrored
         let pipIsWide = AppSettings.shared.pipCamera == .backUltraWide
-        pipCamBtn.isActive    = pipIsWide
-        pipCamBtn.titleText   = pipIsWide ? "WIDE" : "PiP"
         if #available(iOS 13.0, *) {
             pipCamBtn.isEnabled = CameraManager.isUltraWideMultiCamSupported
         } else {
@@ -469,6 +476,29 @@ class ViewController: UIViewController {
         swapLbl.textColor = UIColor.white.withAlphaComponent(0.38)
         swapLbl.tag = 702
         view.addSubview(swapLbl)
+
+        // PiP camera dock button (right of swap)
+        let pipIsWide = AppSettings.shared.pipCamera == .backUltraWide
+        let pipDockIcon = UIImage(systemName: pipIsWide ? "camera.fill" : "person.fill")
+        pipDockBtn.setImage(pipDockIcon, for: .normal)
+        if pipIsWide {
+            pipDockBtn.backgroundColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 0.25)
+            pipDockBtn.layer.borderColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 0.6).cgColor
+        }
+        pipDockBtn.addTarget(self, action: #selector(handlePiPCam), for: .touchUpInside)
+        if #available(iOS 13.0, *) {
+            pipDockBtn.isEnabled = CameraManager.isUltraWideMultiCamSupported
+        } else {
+            pipDockBtn.isEnabled = false
+        }
+        view.addSubview(pipDockBtn)
+
+        let pipDockLbl = UILabel()
+        pipDockLbl.text = pipIsWide ? "WIDE" : "PiP"
+        pipDockLbl.font = UIFont.monospacedSystemFont(ofSize: 8, weight: .semibold)
+        pipDockLbl.textColor = UIColor.white.withAlphaComponent(0.38)
+        pipDockLbl.tag = 703
+        view.addSubview(pipDockLbl)
     }
 
     // MARK: - Audio Meter Setup
@@ -592,8 +622,8 @@ class ViewController: UIViewController {
         let btnH: CGFloat  = ToolbarButton.totalHeight  // icon(40) + gap(3) + label(10) = 53
         let gap: CGFloat   = 5
         let padding: CGFloat = 6
-        let count          = CGFloat(6)
-        let buttons        = [flashBtn, pipCamBtn, mirrorBtn, gridBtn, aeLockBtn, settingsBtn] as [UIView]
+        let count          = CGFloat(5)
+        let buttons        = [flashBtn, mirrorBtn, gridBtn, aeLockBtn, settingsBtn] as [UIView]
 
         if isLandscape {
             let dockW: CGFloat    = 110
@@ -650,6 +680,14 @@ class ViewController: UIViewController {
                 lbl.sizeToFit()
                 lbl.center = CGPoint(x: cx, y: swapBtn.frame.maxY + 8)
             }
+            // PiP dock button (above swap)
+            let pipDockY = swapBtn.frame.minY - 14 - auxSize
+            pipDockBtn.frame = CGRect(x: dockX + (dockW - auxSize) / 2, y: pipDockY, width: auxSize, height: auxSize)
+            pipDockBtn.layer.cornerRadius = auxSize / 2
+            if let lbl = view.viewWithTag(703) as? UILabel {
+                lbl.sizeToFit()
+                lbl.center = CGPoint(x: cx, y: pipDockBtn.frame.maxY + 8)
+            }
         } else {
             // Bottom row
             let dockH: CGFloat = 138
@@ -672,6 +710,14 @@ class ViewController: UIViewController {
             if let lbl = view.viewWithTag(702) as? UILabel {
                 lbl.sizeToFit()
                 lbl.center = CGPoint(x: swapBtn.center.x, y: swapBtn.frame.maxY + 8)
+            }
+            // PiP dock button (left of swap)
+            let pipDockX = swapBtn.frame.minX - 14 - auxSize
+            pipDockBtn.frame = CGRect(x: pipDockX, y: cy - auxSize / 2, width: auxSize, height: auxSize)
+            pipDockBtn.layer.cornerRadius = auxSize / 2
+            if let lbl = view.viewWithTag(703) as? UILabel {
+                lbl.sizeToFit()
+                lbl.center = CGPoint(x: pipDockBtn.center.x, y: pipDockBtn.frame.maxY + 8)
             }
         }
     }
@@ -1206,10 +1252,18 @@ class ViewController: UIViewController {
             AppSettings.shared.pipCamera = .backUltraWide
             pipCamBtn.isActive = true
             pipCamBtn.titleText = "WIDE"
+            pipDockBtn.setImage(UIImage(systemName: "camera.fill"), for: .normal)
+            pipDockBtn.backgroundColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 0.25)
+            pipDockBtn.layer.borderColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 0.6).cgColor
+            (view.viewWithTag(703) as? UILabel)?.text = "WIDE"
         } else {
             AppSettings.shared.pipCamera = .front
             pipCamBtn.isActive = false
             pipCamBtn.titleText = "PiP"
+            pipDockBtn.setImage(UIImage(systemName: "person.fill"), for: .normal)
+            pipDockBtn.backgroundColor = UIColor(white: 0.08, alpha: 0.6)
+            pipDockBtn.layer.borderColor = UIColor.white.withAlphaComponent(0.18).cgColor
+            (view.viewWithTag(703) as? UILabel)?.text = "PiP"
         }
         rebuildCamera()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
