@@ -104,6 +104,14 @@ class SettingsViewController: UIViewController {
             vStack.widthAnchor.constraint(equalTo: scroll.widthAnchor, constant: -32),
         ])
 
+        // ── 内购解锁 ──────────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel("内购"))
+        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
+
+        let iapCard = makeIAPCard()
+        vStack.addArrangedSubview(iapCard)
+        vStack.setCustomSpacing(32, after: iapCard)
+
         // ── 拍摄模式 ──────────────────────────────────────────
         vStack.addArrangedSubview(sectionLabel("拍摄模式"))
         vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
@@ -224,14 +232,6 @@ class SettingsViewController: UIViewController {
         autoSaveRow.heightAnchor.constraint(equalToConstant: 56).isActive = true
         vStack.addArrangedSubview(autoSaveRow)
         vStack.setCustomSpacing(32, after: autoSaveRow)
-
-        // ── 内购解锁 ──────────────────────────────────────────
-        vStack.addArrangedSubview(sectionLabel("内购"))
-        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
-
-        let iapCard = makeIAPCard()
-        vStack.addArrangedSubview(iapCard)
-        vStack.setCustomSpacing(32, after: iapCard)
 
         // ── 反馈 ──────────────────────────────────────────────
         vStack.addArrangedSubview(sectionLabel("反馈"))
@@ -364,20 +364,31 @@ class SettingsViewController: UIViewController {
         btn.layer.borderWidth  = 0.5
         btn.layer.borderColor  = UIColor.white.withAlphaComponent(0.14).cgColor
         btn.translatesAutoresizingMaskIntoConstraints = false
-        btn.contentHorizontalAlignment = .center
 
         let cfg = UIImage.SymbolConfiguration(pointSize: 11, weight: .medium)
-        let img = UIImage(systemName: icon, withConfiguration: cfg)
-        btn.setImage(img, for: .normal)
-        btn.tintColor = .white
+        let iv = UIImageView(image: UIImage(systemName: icon, withConfiguration: cfg))
+        iv.tintColor = .white
+        iv.contentMode = .scaleAspectFit
+        iv.setContentHuggingPriority(.required, for: .horizontal)
 
-        btn.setTitle(title, for: .normal)
-        btn.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
-        btn.setTitleColor(.white, for: .normal)
+        let lbl = UILabel()
+        lbl.text = title
+        lbl.font = UIFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
+        lbl.textColor = .white
 
-        // 图标与标题间距 6pt，整体居中
-        btn.imageEdgeInsets = UIEdgeInsets(top: 0, left: -4, bottom: 0, right: 4)
-        btn.titleEdgeInsets = UIEdgeInsets(top: 0, left: 4, bottom: 0, right: -4)
+        let stack = UIStackView(arrangedSubviews: [iv, lbl])
+        stack.axis = .horizontal
+        stack.spacing = 6
+        stack.alignment = .center
+        stack.isUserInteractionEnabled = false
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        btn.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.centerXAnchor.constraint(equalTo: btn.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: btn.centerYAnchor),
+            stack.leadingAnchor.constraint(greaterThanOrEqualTo: btn.leadingAnchor, constant: 8),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: btn.trailingAnchor, constant: -8),
+        ])
         return btn
     }
 
