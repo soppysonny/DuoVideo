@@ -76,6 +76,7 @@ class ViewController: UIViewController {
     private let gridBtn   = ToolbarButton(icon: "grid",             iconOff: nil,               title: "GRID")
     private let aeLockBtn    = ToolbarButton(icon: "lock.fill",        iconOff: "lock.open.fill",  title: "AE/AF")
     private let settingsBtn  = ToolbarButton(icon: "gearshape.fill",   iconOff: nil,               title: "SET")
+    private let modeBtn      = ToolbarButton(icon: "camera.aperture",  iconOff: "video.fill",      title: "MODE")
 
     // MARK: - Bottom dock
 
@@ -232,6 +233,11 @@ class ViewController: UIViewController {
         setupBottomDock()
         setupAudioMeter()
         setupNotSupported()
+
+        // Sync initial capture mode state
+        let initialPhoto = AppSettings.shared.captureMode == .photo
+        modeBtn.isActive = initialPhoto
+        recordButton.setPhotoMode(initialPhoto, animated: false)
 
         // position on first pass
         applyLayout(for: view.bounds.size)
@@ -410,6 +416,7 @@ class ViewController: UIViewController {
             (gridBtn,     #selector(handleGrid)),
             (aeLockBtn,   #selector(handleAELock)),
             (settingsBtn, #selector(handleSettings)),
+            (modeBtn,     #selector(handleCaptureMode)),
         ] as [(ToolbarButton, Selector)] {
             btn.addTarget(self, action: sel, for: .touchUpInside)
             sideToolbarBlur.contentView.addSubview(btn)
@@ -417,6 +424,7 @@ class ViewController: UIViewController {
 
         // Initial active state driven by AppSettings
         mirrorBtn.isActive    = AppSettings.shared.recordMirrored
+        modeBtn.isActive      = AppSettings.shared.captureMode == .photo
         let pipIsWide = AppSettings.shared.pipCamera == .backUltraWide
         if #available(iOS 13.0, *) {
             pipCamBtn.isEnabled = CameraManager.isUltraWideMultiCamSupported
@@ -622,8 +630,8 @@ class ViewController: UIViewController {
         let btnH: CGFloat  = ToolbarButton.totalHeight  // icon(40) + gap(3) + label(10) = 53
         let gap: CGFloat   = 5
         let padding: CGFloat = 6
-        let count          = CGFloat(5)
-        let buttons        = [flashBtn, mirrorBtn, gridBtn, aeLockBtn, settingsBtn] as [UIView]
+        let count          = CGFloat(6)
+        let buttons        = [flashBtn, mirrorBtn, gridBtn, aeLockBtn, settingsBtn, modeBtn] as [UIView]
 
         if isLandscape {
             let dockW: CGFloat    = 110
@@ -1326,6 +1334,15 @@ class ViewController: UIViewController {
 
     @objc private func captureModeChanged() {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let isPhoto = AppSettings.shared.captureMode == .photo
+        modeBtn.isActive = isPhoto
+        recordButton.setPhotoMode(isPhoto, animated: true)
+    }
+
+    @objc private func handleCaptureMode() {
+        let current = AppSettings.shared.captureMode
+        AppSettings.shared.captureMode = current == .video ? .photo : .video
+        NotificationCenter.default.post(name: .captureModeChanged, object: nil)
     }
 
     @objc private func recordingsChanged() {

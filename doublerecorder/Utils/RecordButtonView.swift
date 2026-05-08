@@ -165,6 +165,28 @@ class RecordButtonView: UIControl {
         idleRingLayer.add(spin, forKey: "spin")
     }
 
+    // MARK: - Photo mode
+
+    private var isPhotoMode: Bool = false
+
+    func setPhotoMode(_ photo: Bool, animated: Bool) {
+        guard isPhotoMode != photo else { return }
+        isPhotoMode = photo
+        let update = {
+            self.innerView.backgroundColor = photo
+                ? UIColor(red: 1, green: 1, blue: 1, alpha: 0.9)
+                : self.recRed
+            self.trackLayer.strokeColor = photo
+                ? UIColor.white.withAlphaComponent(0.50).cgColor
+                : UIColor.white.withAlphaComponent(0.32).cgColor
+        }
+        if animated {
+            UIView.animate(withDuration: 0.2, animations: update)
+        } else {
+            update()
+        }
+    }
+
     // MARK: - Touch
 
     override var isHighlighted: Bool {
