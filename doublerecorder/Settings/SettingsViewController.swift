@@ -1,4 +1,6 @@
 import UIKit
+import StoreKit
+import MessageUI
 
 class SettingsViewController: UIViewController {
 
@@ -9,10 +11,16 @@ class SettingsViewController: UIViewController {
     private let backRow      = SettingsToggleRow(title: "BACK CAM",  subtitle: "后摄独立视频")
     private let frontRow     = SettingsToggleRow(title: "FRONT CAM", subtitle: "前摄独立视频")
     private let mirrorRow    = SettingsToggleRow(title: "MIRROR",    subtitle: "前摄录制镜像翻转")
+    private let autoSaveRow  = SettingsToggleRow(title: "AUTO SAVE", subtitle: "录制完成后自动保存到相册")
 
     private var resTiles: [OptionTile] = []
     private var fpsTiles: [OptionTile] = []
     private var pipTiles: [OptionTile] = []
+
+    // IAP state
+    private var iapStatusLabel: UILabel?
+    private var buyButton: UIButton?
+    private var restoreButton: UIButton?
 
     // MARK: - Lifecycle
 
@@ -203,6 +211,36 @@ class SettingsViewController: UIViewController {
             pipRow.addArrangedSubview(tile)
         }
         vStack.addArrangedSubview(pipRow)
+        vStack.setCustomSpacing(32, after: pipRow)
+
+        // ── 自动保存 ──────────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel("保存"))
+        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
+
+        autoSaveRow.onToggle = { [weak self] val in
+            self?.settings.autoSaveToPhotos = val
+        }
+        autoSaveRow.setCorners(top: true, bottom: true)
+        autoSaveRow.heightAnchor.constraint(equalToConstant: 56).isActive = true
+        vStack.addArrangedSubview(autoSaveRow)
+        vStack.setCustomSpacing(32, after: autoSaveRow)
+
+        // ── 内购解锁 ──────────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel("内购"))
+        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
+
+        let iapCard = makeIAPCard()
+        vStack.addArrangedSubview(iapCard)
+        vStack.setCustomSpacing(32, after: iapCard)
+
+        // ── 反馈 ──────────────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel("反馈"))
+        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
+
+        let feedbackBtn = makeActionButton(title: "发送反馈邮件", icon: "envelope.fill")
+        feedbackBtn.addTarget(self, action: #selector(sendFeedback), for: .touchUpInside)
+        feedbackBtn.heightAnchor.constraint(equalToConstant: 52).isActive = true
+        vStack.addArrangedSubview(feedbackBtn)
     }
 
     private func sectionLabel(_ text: String) -> UILabel {
@@ -243,9 +281,11 @@ class SettingsViewController: UIViewController {
         backRow.isOn      = settings.saveBack
         frontRow.isOn     = settings.saveFront
         mirrorRow.isOn    = settings.recordMirrored
+        autoSaveRow.isOn  = settings.autoSaveToPhotos
         syncResTiles()
         syncFpsTiles()
         syncPipTiles()
+        syncIAPUI()
     }
 
     private func syncResTiles() {
@@ -263,6 +303,91 @@ class SettingsViewController: UIViewController {
         for (tile, val) in zip(pipTiles, order) { tile.isSelected = val == settings.pipCamera }
     }
 
+    // MARK: - IAP Card
+
+    private func makeIAPCard() -> UIView {
+        let card = UIView()
+        card.backgroundColor    = UIColor(white: 0.13, alpha: 1)
+        card.layer.cornerRadius = 12
+        card.translatesAutoresizingMaskIntoConstraints = false
+        card.heightAnchor.constraint(equalToConstant: 130).isActive = true
+
+        let statusLbl = UILabel()
+        statusLbl.font      = UIFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
+        statusLbl.textColor = .white
+        statusLbl.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(statusLbl)
+        iapStatusLabel = statusLbl
+
+        let subLbl = UILabel()
+        subLbl.font      = UIFont.systemFont(ofSize: 11)
+        subLbl.textColor = UIColor.white.withAlphaComponent(0.40)
+        subLbl.text      = "一次性解锁，无限次录制"
+        subLbl.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(subLbl)
+
+        let btnStack = UIStackView()
+        btnStack.axis    = .horizontal
+        btnStack.spacing = 8
+        btnStack.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(btnStack)
+
+        let buy = makeActionButton(title: "解锁高级版", icon: "star.fill")
+        buy.addTarget(self, action: #selector(purchaseTapped), for: .touchUpInside)
+        buyButton = buy
+
+        let restore = makeActionButton(title: "恢复购买", icon: "arrow.clockwise")
+        restore.addTarget(self, action: #selector(restoreTapped), for: .touchUpInside)
+        restoreButton = restore
+
+        btnStack.addArrangedSubview(buy)
+        btnStack.addArrangedSubview(restore)
+
+        NSLayoutConstraint.activate([
+            statusLbl.topAnchor.constraint(equalTo: card.topAnchor, constant: 14),
+            statusLbl.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            subLbl.topAnchor.constraint(equalTo: statusLbl.bottomAnchor, constant: 4),
+            subLbl.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            btnStack.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -14),
+            btnStack.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            btnStack.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            btnStack.heightAnchor.constraint(equalToConstant: 40),
+        ])
+
+        return card
+    }
+
+    private func makeActionButton(title: String, icon: String) -> UIButton {
+        let btn = UIButton(type: .custom)
+        btn.backgroundColor    = UIColor(white: 0.20, alpha: 1)
+        btn.layer.cornerRadius = 10
+        btn.layer.borderWidth  = 0.5
+        btn.layer.borderColor  = UIColor.white.withAlphaComponent(0.14).cgColor
+        btn.translatesAutoresizingMaskIntoConstraints = false
+
+        let cfg = UIImage.SymbolConfiguration(pointSize: 11, weight: .medium)
+        let img = UIImage(systemName: icon, withConfiguration: cfg)
+        btn.setImage(img, for: .normal)
+        btn.tintColor = .white
+
+        btn.setTitle("  \(title)", for: .normal)
+        btn.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
+        btn.setTitleColor(.white, for: .normal)
+        return btn
+    }
+
+    private func syncIAPUI() {
+        let isPro = settings.isProUser
+        iapStatusLabel?.text = isPro ? "✓  已解锁高级版" : "免费版  ·  还可录制 \(KeychainHelper.shared.remainingFreeRecordings) 次"
+        iapStatusLabel?.textColor = isPro
+            ? UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 1)
+            : .white
+        buyButton?.isEnabled  = !isPro
+        buyButton?.alpha      = isPro ? 0.35 : 1.0
+        restoreButton?.isEnabled = !isPro
+        restoreButton?.alpha     = isPro ? 0.35 : 1.0
+    }
+
     // MARK: - Actions
 
     @objc private func closeTapped() {
@@ -272,6 +397,61 @@ class SettingsViewController: UIViewController {
     @objc private func modeChanged() {
         settings.captureMode = modeSegment.selectedSegmentIndex == 0 ? .video : .photo
         NotificationCenter.default.post(name: .captureModeChanged, object: nil)
+    }
+
+    @objc private func purchaseTapped() {
+        IAPManager.shared.onPurchaseSuccess = { [weak self] in
+            self?.syncIAPUI()
+            let alert = UIAlertController(title: "解锁成功 🎉", message: "感谢支持！现在可以无限录制了。", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "好的", style: .default))
+            self?.present(alert, animated: true)
+        }
+        IAPManager.shared.onPurchaseFailed = { [weak self] err in
+            guard let err else { return } // 用户取消，不弹窗
+            let alert = UIAlertController(title: "购买失败", message: err.localizedDescription, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "好", style: .default))
+            self?.present(alert, animated: true)
+        }
+        IAPManager.shared.purchase()
+    }
+
+    @objc private func restoreTapped() {
+        IAPManager.shared.onPurchaseSuccess = { [weak self] in
+            self?.syncIAPUI()
+            let alert = UIAlertController(title: "恢复成功", message: "已恢复高级版权益。", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "好的", style: .default))
+            self?.present(alert, animated: true)
+        }
+        IAPManager.shared.onRestoreNotFound = { [weak self] in
+            let alert = UIAlertController(title: "未找到购买记录", message: "请确认使用了当初购买时的 Apple ID。", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "好", style: .default))
+            self?.present(alert, animated: true)
+        }
+        IAPManager.shared.onPurchaseFailed = { [weak self] err in
+            guard let err else { return }
+            let alert = UIAlertController(title: "恢复失败", message: err.localizedDescription, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "好", style: .default))
+            self?.present(alert, animated: true)
+        }
+        IAPManager.shared.restore()
+    }
+
+    @objc private func sendFeedback() {
+        let email = "lava@mbjztech.cn"
+        let subject = "DuoVideo 反馈"
+        if MFMailComposeViewController.canSendMail() {
+            let vc = MFMailComposeViewController()
+            vc.mailComposeDelegate = self
+            vc.setToRecipients([email])
+            vc.setSubject(subject)
+            present(vc, animated: true)
+        } else {
+            // 没有邮件客户端时打开 mailto 链接
+            let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+            if let url = URL(string: "mailto:\(email)?subject=\(encodedSubject)") {
+                UIApplication.shared.open(url)
+            }
+        }
     }
 
     private func validateAndSave() {
@@ -288,6 +468,16 @@ class SettingsViewController: UIViewController {
         settings.saveComposite = c
         settings.saveBack      = b
         settings.saveFront     = f
+    }
+}
+
+// MARK: - MFMailComposeViewControllerDelegate
+
+extension SettingsViewController: MFMailComposeViewControllerDelegate {
+    func mailComposeController(_ controller: MFMailComposeViewController,
+                               didFinishWith result: MFMailComposeResult,
+                               error: Error?) {
+        controller.dismiss(animated: true)
     }
 }
 

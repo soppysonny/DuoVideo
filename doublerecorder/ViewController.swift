@@ -415,8 +415,8 @@ class ViewController: UIViewController {
             (mirrorBtn,   #selector(handleMirror)),
             (gridBtn,     #selector(handleGrid)),
             (aeLockBtn,   #selector(handleAELock)),
-            (settingsBtn, #selector(handleSettings)),
             (modeBtn,     #selector(handleCaptureMode)),
+            (settingsBtn, #selector(handleSettings)),
         ] as [(ToolbarButton, Selector)] {
             btn.addTarget(self, action: sel, for: .touchUpInside)
             sideToolbarBlur.contentView.addSubview(btn)
@@ -631,7 +631,7 @@ class ViewController: UIViewController {
         let gap: CGFloat   = 5
         let padding: CGFloat = 6
         let count          = CGFloat(6)
-        let buttons        = [flashBtn, mirrorBtn, gridBtn, aeLockBtn, settingsBtn, modeBtn] as [UIView]
+        let buttons        = [flashBtn, mirrorBtn, gridBtn, aeLockBtn, modeBtn, settingsBtn] as [UIView]
 
         if isLandscape {
             let dockW: CGFloat    = 110
@@ -1020,6 +1020,12 @@ class ViewController: UIViewController {
     }
 
     private func startRecording() {
+        // 检查录制次数限制
+        if !KeychainHelper.shared.canRecord {
+            showPaywall()
+            return
+        }
+
         let orientation = AVCaptureVideoOrientation(device: UIDevice.current.orientation) ?? .portrait
         lockedOrientation = orientation
         cameraManager?.setVideoOrientation(orientation)
@@ -1036,6 +1042,8 @@ class ViewController: UIViewController {
             return
         }
 
+        KeychainHelper.shared.incrementRecordingCount()
+
         recordButton.isRecording = true
         setRecordingUI(true)
         startTimer()
@@ -1045,6 +1053,29 @@ class ViewController: UIViewController {
         UIView.animate(withDuration: 0.2) {
             self.pipRecBorderLayer.opacity = 1
         }
+    }
+
+    private func showPaywall() {
+        let remaining = KeychainHelper.shared.remainingFreeRecordings
+        let alert = UIAlertController(
+            title: "免费次数已用完",
+            message: "免费版可录制 \(KeychainHelper.freeLimit) 次，解锁高级版后即可无限录制。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "解锁高级版", style: .default) { [weak self] _ in
+            IAPManager.shared.onPurchaseSuccess = { [weak self] in
+                let done = UIAlertController(title: "解锁成功 🎉", message: "现在可以无限录制了！", preferredStyle: .alert)
+                done.addAction(UIAlertAction(title: "好的", style: .default))
+                self?.present(done, animated: true)
+            }
+            IAPManager.shared.onPurchaseFailed = { [weak self] err in
+                guard let err else { return }
+                self?.showAlert(title: "购买失败", message: err.localizedDescription)
+            }
+            IAPManager.shared.purchase()
+        })
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        present(alert, animated: true)
     }
 
     private func stopRecording() {
@@ -1075,13 +1106,15 @@ class ViewController: UIViewController {
     }
 
     private func saveSession(_ session: RecordingSession) {
-        // 文件保留在沙盒供应用内画廊使用，同时异步导出到系统相册
+        // 文件保留在沙盒供应用内画廊使用
+        refreshGalleryBadge()
+        // 仅在开启自动保存时导出到系统相册
+        guard AppSettings.shared.autoSaveToPhotos else { return }
         photoExporter.exportSession(session) { [weak self] result in
             if case .failure(let err) = result {
                 self?.showAlert(title: "导出相册失败", message: err.localizedDescription)
             }
         }
-        refreshGalleryBadge()
     }
 
     private func refreshGalleryBadge() {

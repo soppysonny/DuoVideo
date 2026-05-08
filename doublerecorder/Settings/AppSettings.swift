@@ -83,6 +83,13 @@ final class AppSettings {
         set { UserDefaults.standard.set(newValue.rawValue, forKey: "pipCamera") }
     }
 
+    // MARK: - Auto save to Photos
+
+    var autoSaveToPhotos: Bool {
+        get { UserDefaults.standard.object(forKey: "autoSaveToPhotos") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "autoSaveToPhotos") }
+    }
+
     // MARK: - Pro
 
     var isProUser: Bool {

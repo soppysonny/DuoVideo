@@ -29,7 +29,7 @@ class CameraManager: NSObject {
     private var backDevice:  AVCaptureDevice?
     private var frontDevice: AVCaptureDevice?
 
-    // 保存连接引用，用于运行时更新朝向
+    // 保存连接引用，用于运行时更新朝向。
     private var backDataConnection:    AVCaptureConnection?
     private var frontDataConnection:   AVCaptureConnection?
     private var backPreviewConnection: AVCaptureConnection?

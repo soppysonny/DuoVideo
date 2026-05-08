@@ -204,7 +204,10 @@ extension RecordingsListViewController: UITableViewDataSource, UITableViewDelega
             let player = AVPlayer(url: record.url)
             let vc = AVPlayerViewController()
             vc.player = player
-            present(vc, animated: true) { player.play() }
+            // Attach share button via accessory view overlay after presentation
+            let shareVC = VideoShareOverlayController(fileURL: record.url, playerVC: vc)
+            shareVC.modalPresentationStyle = .fullScreen
+            present(shareVC, animated: true) { player.play() }
         }
     }
 
@@ -472,13 +475,86 @@ final class ThumbnailCache {
     }
 }
 
+// MARK: - Video Share Overlay (wraps AVPlayerViewController + share button)
+
+/// AVPlayerViewController를 child로 embed하고 우상단에 공유 버튼을 오버레이합니다.
+private final class VideoShareOverlayController: UIViewController {
+
+    private let fileURL: URL
+    private let playerVC: AVPlayerViewController
+
+    init(fileURL: URL, playerVC: AVPlayerViewController) {
+        self.fileURL  = fileURL
+        self.playerVC = playerVC
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+
+        // Embed AVPlayerViewController
+        addChild(playerVC)
+        playerVC.view.frame = view.bounds
+        playerVC.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(playerVC.view)
+        playerVC.didMove(toParent: self)
+
+        // Close button (top-left)
+        let closeBtn = UIButton(type: .system)
+        let closeCfg = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        closeBtn.setImage(UIImage(systemName: "xmark.circle.fill", withConfiguration: closeCfg), for: .normal)
+        closeBtn.tintColor = UIColor.white.withAlphaComponent(0.85)
+        closeBtn.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+        closeBtn.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(closeBtn)
+
+        // Share button (top-right)
+        let shareBtn = UIButton(type: .system)
+        let shareCfg = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        shareBtn.setImage(UIImage(systemName: "square.and.arrow.up", withConfiguration: shareCfg), for: .normal)
+        shareBtn.tintColor = UIColor.white.withAlphaComponent(0.85)
+        shareBtn.addTarget(self, action: #selector(shareTapped), for: .touchUpInside)
+        shareBtn.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(shareBtn)
+
+        NSLayoutConstraint.activate([
+            closeBtn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            closeBtn.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            closeBtn.widthAnchor.constraint(equalToConstant: 36),
+            closeBtn.heightAnchor.constraint(equalToConstant: 36),
+
+            shareBtn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            shareBtn.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            shareBtn.widthAnchor.constraint(equalToConstant: 36),
+            shareBtn.heightAnchor.constraint(equalToConstant: 36),
+        ])
+    }
+
+    override var prefersStatusBarHidden: Bool { true }
+
+    @objc private func closeTapped() {
+        playerVC.player?.pause()
+        dismiss(animated: true)
+    }
+
+    @objc private func shareTapped() {
+        let ac = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+        ac.popoverPresentationController?.sourceView = view
+        present(ac, animated: true)
+    }
+}
+
 // MARK: - Photo Viewer
 
 private final class PhotoViewerController: UIViewController {
 
     private let imageView = UIImageView()
+    private let fileURL: URL
 
     init(url: URL) {
+        self.fileURL = url
         super.init(nibName: nil, bundle: nil)
         modalPresentationStyle = .fullScreen
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -494,17 +570,54 @@ private final class PhotoViewerController: UIViewController {
         imageView.contentMode = .scaleAspectFit
         imageView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(imageView)
+
+        // Close button (tap anywhere)
+        view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(closeTapped)))
+
+        // Share button (top-right)
+        let shareBtn = UIButton(type: .system)
+        let cfg = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        shareBtn.setImage(UIImage(systemName: "square.and.arrow.up", withConfiguration: cfg), for: .normal)
+        shareBtn.tintColor = UIColor.white.withAlphaComponent(0.85)
+        shareBtn.addTarget(self, action: #selector(shareTapped), for: .touchUpInside)
+        shareBtn.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(shareBtn)
+
+        // Close button (top-left, explicit)
+        let closeBtn = UIButton(type: .system)
+        let closeCfg = UIImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        closeBtn.setImage(UIImage(systemName: "xmark.circle.fill", withConfiguration: closeCfg), for: .normal)
+        closeBtn.tintColor = UIColor.white.withAlphaComponent(0.85)
+        closeBtn.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
+        closeBtn.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(closeBtn)
+
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: view.topAnchor),
             imageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             imageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+
+            closeBtn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            closeBtn.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            closeBtn.widthAnchor.constraint(equalToConstant: 36),
+            closeBtn.heightAnchor.constraint(equalToConstant: 36),
+
+            shareBtn.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 12),
+            shareBtn.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            shareBtn.widthAnchor.constraint(equalToConstant: 36),
+            shareBtn.heightAnchor.constraint(equalToConstant: 36),
         ])
-        view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(closeTapped)))
     }
 
     override var prefersStatusBarHidden: Bool { true }
 
     @objc private func closeTapped() { dismiss(animated: true) }
+
+    @objc private func shareTapped() {
+        let ac = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+        ac.popoverPresentationController?.sourceView = view
+        present(ac, animated: true)
+    }
 }
 
