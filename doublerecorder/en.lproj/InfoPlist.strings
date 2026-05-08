@@ -1,0 +1,3 @@
+NSCameraUsageDescription = "Camera access is required for dual-camera synchronized recording";
+NSMicrophoneUsageDescription = "Microphone access is required to record audio with your videos";
+NSPhotoLibraryAddUsageDescription = "Photo Library access is required to save your recordings";

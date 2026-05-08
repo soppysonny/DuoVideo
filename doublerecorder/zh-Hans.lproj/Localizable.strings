@@ -1,0 +1,92 @@
+/* Buttons */
+"btn.ok" = "好";
+"btn.cancel" = "取消";
+"btn.go_to_settings" = "去设置";
+"btn.unlock_pro" = "解锁高级版";
+"btn.restore_purchase" = "恢复购买";
+"btn.send_feedback" = "发送反馈邮件";
+
+/* Alerts */
+"alert.permission_title" = "需要权限";
+"alert.permission_message" = "请在【设置】中开启摄像头、麦克风和相册权限";
+"alert.camera_init_failed" = "摄像头初始化失败";
+"alert.quality_adjusted" = "画质已自动调整";
+"alert.recording_start_failed" = "录制启动失败";
+"alert.recording_failed" = "录制失败";
+"alert.export_failed" = "导出相册失败";
+"alert.photo_failed" = "拍照失败";
+"alert.free_limit_title" = "免费次数已用完";
+"alert.free_limit_message" = "免费版可录制 %d 次，解锁高级版后即可无限录制。";
+"alert.unlock_success_title" = "解锁成功 🎉";
+"alert.unlock_success_short" = "现在可以无限录制了！";
+"alert.purchase_success_message" = "感谢支持！现在可以无限录制了。";
+"alert.purchase_failed" = "购买失败";
+"alert.restore_success_title" = "恢复成功";
+"alert.restore_success_message" = "已恢复高级版权益。";
+"alert.restore_not_found_title" = "未找到购买记录";
+"alert.restore_not_found_message" = "请确认使用了当初购买时的 Apple ID。";
+"alert.restore_failed" = "恢复失败";
+"alert.output_required_title" = "至少选择一种输出";
+"alert.output_required_message" = "合成视频、后摄和前摄至少保留一种";
+
+/* Toast */
+"toast.ultrawide_not_supported" = "当前设备不支持超广角双摄";
+
+/* Not supported overlay */
+"device.not_supported" = "您的设备不支持双摄录制\n（需要 iPhone 11 Pro 或更新机型）";
+
+/* Camera errors */
+"camera.back_unavailable" = "后置摄像头不可用";
+"camera.front_unavailable" = "前置摄像头不可用";
+"camera.ultrawide_unavailable" = "超广角摄像头不可用";
+"camera.mic_unavailable" = "麦克风不可用";
+"camera.cannot_add_back_input" = "无法添加后摄 input";
+"camera.cannot_add_back_output" = "无法添加后摄 output";
+"camera.cannot_get_back_port" = "无法获取后摄 port";
+"camera.cannot_connect_back" = "无法建立后摄连接";
+"camera.cannot_add_front_input" = "无法添加前摄 input";
+"camera.cannot_add_front_output" = "无法添加前摄 output";
+"camera.cannot_get_front_port" = "无法获取前摄 port";
+"camera.cannot_connect_front" = "无法建立前摄连接";
+"camera.cannot_add_ultrawide_input" = "无法添加超广角 input";
+"camera.cannot_add_ultrawide_output" = "无法添加超广角 output";
+"camera.cannot_get_ultrawide_port" = "无法获取超广角 port";
+"camera.cannot_connect_ultrawide" = "无法建立超广角连接";
+"camera.cannot_add_mic_input" = "无法添加麦克风 input";
+"camera.cannot_add_audio_output" = "无法添加音频 output";
+"camera.cannot_get_mic_port" = "无法获取麦克风 port";
+"camera.cannot_connect_audio" = "无法建立音频连接";
+"camera.back" = "后摄";
+"camera.front" = "前摄";
+"camera.fps_line" = "%@：%dfps → %dfps";
+"camera.quality_partial_prefix" = "当前设置不完全受支持，已自动调整：\n";
+"camera.quality_fps_reduced" = "当前设置超出硬件限制，帧率已自动降至 %dfps";
+
+/* Settings */
+"settings.title" = "SETTINGS";
+"section.iap" = "内购";
+"section.capture_mode" = "拍摄模式";
+"section.capture_mode_hint" = "切换此选项即切换拍摄模式";
+"section.save_files" = "保存文件";
+"section.recording_effects" = "录制效果";
+"section.resolution" = "清晰度";
+"section.frame_rate" = "帧率";
+"section.pip_camera" = "PiP 摄像头";
+"section.save" = "保存";
+"section.feedback" = "反馈";
+"toggle.composite_subtitle" = "前后摄 PiP 合成视频";
+"toggle.back_cam_subtitle" = "后摄独立视频";
+"toggle.front_cam_subtitle" = "前摄独立视频";
+"toggle.mirror_subtitle" = "前摄录制镜像翻转";
+"toggle.autosave_subtitle" = "录制完成后自动保存到相册";
+"pip.front" = "前置";
+"pip.back_wide" = "后广角";
+"iap.description" = "一次性解锁，无限次录制";
+"iap.pro_unlocked" = "✓  已解锁高级版";
+"iap.free_remaining" = "免费版  ·  还可录制 %d 次";
+"feedback.email_subject" = "DuoVideo 反馈";
+
+/* Recordings list */
+"recordings.empty" = "暂无录制记录";
+"recordings.delete" = "删除";
+"recordings.title_count" = "RECORDINGS  ·  %d";

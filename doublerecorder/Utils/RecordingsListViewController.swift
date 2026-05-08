@@ -87,7 +87,7 @@ class RecordingsListViewController: UIViewController {
         tableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
 
-        emptyLabel.text          = "暂无录制记录"
+        emptyLabel.text          = NSLocalizedString("recordings.empty", comment: "")
         emptyLabel.font          = UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         emptyLabel.textColor     = UIColor.white.withAlphaComponent(0.28)
         emptyLabel.textAlignment = .center
@@ -155,7 +155,7 @@ class RecordingsListViewController: UIViewController {
 
     private func refresh() {
         let count = records.count
-        titleLabel.text     = count == 0 ? "RECORDINGS" : "RECORDINGS  ·  \(count)"
+        titleLabel.text     = count == 0 ? "RECORDINGS" : String(format: NSLocalizedString("recordings.title_count", comment: ""), count)
         emptyLabel.isHidden = count > 0
         tableView.reloadData()
     }
@@ -213,7 +213,7 @@ extension RecordingsListViewController: UITableViewDataSource, UITableViewDelega
 
     func tableView(_ tableView: UITableView,
                    trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
-        let del = UIContextualAction(style: .destructive, title: "删除") { [weak self] _, _, done in
+        let del = UIContextualAction(style: .destructive, title: NSLocalizedString("recordings.delete", comment: "")) { [weak self] _, _, done in
             guard let self else { done(false); return }
             let record = self.records.remove(at: indexPath.row)
             try? FileManager.default.removeItem(at: record.url)

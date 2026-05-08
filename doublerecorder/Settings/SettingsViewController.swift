@@ -7,11 +7,11 @@ class SettingsViewController: UIViewController {
     private let settings = AppSettings.shared
 
     private let modeSegment  = UISegmentedControl(items: ["VIDEO", "PHOTO"])
-    private let compositeRow = SettingsToggleRow(title: "COMPOSITE", subtitle: "前后摄 PiP 合成视频")
-    private let backRow      = SettingsToggleRow(title: "BACK CAM",  subtitle: "后摄独立视频")
-    private let frontRow     = SettingsToggleRow(title: "FRONT CAM", subtitle: "前摄独立视频")
-    private let mirrorRow    = SettingsToggleRow(title: "MIRROR",    subtitle: "前摄录制镜像翻转")
-    private let autoSaveRow  = SettingsToggleRow(title: "AUTO SAVE", subtitle: "录制完成后自动保存到相册")
+    private let compositeRow = SettingsToggleRow(title: "COMPOSITE", subtitle: NSLocalizedString("toggle.composite_subtitle", comment: ""))
+    private let backRow      = SettingsToggleRow(title: "BACK CAM",  subtitle: NSLocalizedString("toggle.back_cam_subtitle", comment: ""))
+    private let frontRow     = SettingsToggleRow(title: "FRONT CAM", subtitle: NSLocalizedString("toggle.front_cam_subtitle", comment: ""))
+    private let mirrorRow    = SettingsToggleRow(title: "MIRROR",    subtitle: NSLocalizedString("toggle.mirror_subtitle", comment: ""))
+    private let autoSaveRow  = SettingsToggleRow(title: "AUTO SAVE", subtitle: NSLocalizedString("toggle.autosave_subtitle", comment: ""))
 
     private var resTiles: [OptionTile] = []
     private var fpsTiles: [OptionTile] = []
@@ -38,7 +38,7 @@ class SettingsViewController: UIViewController {
     private func buildUI() {
         // Title
         let titleLabel = UILabel()
-        titleLabel.text      = "SETTINGS"
+        titleLabel.text      = NSLocalizedString("settings.title", comment: "")
         titleLabel.font      = UIFont.monospacedSystemFont(ofSize: 13, weight: .semibold)
         titleLabel.textColor = .white
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -105,7 +105,7 @@ class SettingsViewController: UIViewController {
         ])
 
         // ── 内购解锁 ──────────────────────────────────────────
-        vStack.addArrangedSubview(sectionLabel("内购"))
+        vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.iap", comment: "")))
         vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
 
         let iapCard = makeIAPCard()
@@ -113,7 +113,7 @@ class SettingsViewController: UIViewController {
         vStack.setCustomSpacing(32, after: iapCard)
 
         // ── 拍摄模式 ──────────────────────────────────────────
-        vStack.addArrangedSubview(sectionLabel("拍摄模式"))
+        vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.capture_mode", comment: "")))
         vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
 
         styleSegment(modeSegment)
@@ -122,12 +122,12 @@ class SettingsViewController: UIViewController {
         vStack.addArrangedSubview(modeSegment)
         vStack.setCustomSpacing(8, after: modeSegment)
 
-        let modeCaption = sectionLabel("切换此选项即切换拍摄模式")
+        let modeCaption = sectionLabel(NSLocalizedString("section.capture_mode_hint", comment: ""))
         vStack.addArrangedSubview(modeCaption)
         vStack.setCustomSpacing(32, after: modeCaption)
 
         // ── 保存文件 ──────────────────────────────────────────
-        vStack.addArrangedSubview(sectionLabel("保存文件"))
+        vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.save_files", comment: "")))
         vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
 
         let toggleRows: [SettingsToggleRow] = [compositeRow, backRow, frontRow]
@@ -140,7 +140,7 @@ class SettingsViewController: UIViewController {
         }
 
         // ── 录制效果 ──────────────────────────────────────────
-        vStack.addArrangedSubview(sectionLabel("录制效果"))
+        vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.recording_effects", comment: "")))
         vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
 
         mirrorRow.onToggle = { [weak self] val in
@@ -153,7 +153,7 @@ class SettingsViewController: UIViewController {
         vStack.setCustomSpacing(32, after: mirrorRow)
 
         // ── 清晰度 ────────────────────────────────────────────
-        vStack.addArrangedSubview(sectionLabel("清晰度"))
+        vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.resolution", comment: "")))
         vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
 
         let resRow = makePickerRow()
@@ -176,7 +176,7 @@ class SettingsViewController: UIViewController {
         vStack.setCustomSpacing(32, after: resRow)
 
         // ── 帧率 ──────────────────────────────────────────────
-        vStack.addArrangedSubview(sectionLabel("帧率"))
+        vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.frame_rate", comment: "")))
         vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
 
         let fpsRow = makePickerRow()
@@ -199,13 +199,13 @@ class SettingsViewController: UIViewController {
         vStack.setCustomSpacing(32, after: fpsRow)
 
         // ── PiP 摄像头（小窗口）────────────────────────────────
-        vStack.addArrangedSubview(sectionLabel("PiP 摄像头"))
+        vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.pip_camera", comment: "")))
         vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
 
         let pipRow = makePickerRow()
         let pipOptions: [(String, String, AppSettings.PiPCamera)] = [
-            ("前置",   "FRONT",     .front),
-            ("后广角", "BACK WIDE", .backUltraWide),
+            (NSLocalizedString("pip.front", comment: ""),    "FRONT",     .front),
+            (NSLocalizedString("pip.back_wide", comment: ""), "BACK WIDE", .backUltraWide),
         ]
         for opt in pipOptions {
             let tile = OptionTile(title: opt.0, subtitle: opt.1)
@@ -222,7 +222,7 @@ class SettingsViewController: UIViewController {
         vStack.setCustomSpacing(32, after: pipRow)
 
         // ── 自动保存 ──────────────────────────────────────────
-        vStack.addArrangedSubview(sectionLabel("保存"))
+        vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.save", comment: "")))
         vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
 
         autoSaveRow.onToggle = { [weak self] val in
@@ -234,10 +234,10 @@ class SettingsViewController: UIViewController {
         vStack.setCustomSpacing(32, after: autoSaveRow)
 
         // ── 反馈 ──────────────────────────────────────────────
-        vStack.addArrangedSubview(sectionLabel("反馈"))
+        vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.feedback", comment: "")))
         vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
 
-        let feedbackBtn = makeActionButton(title: "发送反馈邮件", icon: "envelope.fill")
+        let feedbackBtn = makeActionButton(title: NSLocalizedString("btn.send_feedback", comment: ""), icon: "envelope.fill")
         feedbackBtn.addTarget(self, action: #selector(sendFeedback), for: .touchUpInside)
         feedbackBtn.heightAnchor.constraint(equalToConstant: 52).isActive = true
         vStack.addArrangedSubview(feedbackBtn)
@@ -322,7 +322,7 @@ class SettingsViewController: UIViewController {
         let subLbl = UILabel()
         subLbl.font      = UIFont.systemFont(ofSize: 11)
         subLbl.textColor = UIColor.white.withAlphaComponent(0.40)
-        subLbl.text      = "一次性解锁，无限次录制"
+        subLbl.text      = NSLocalizedString("iap.description", comment: "")
         subLbl.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(subLbl)
 
@@ -332,11 +332,11 @@ class SettingsViewController: UIViewController {
         btnStack.translatesAutoresizingMaskIntoConstraints = false
         card.addSubview(btnStack)
 
-        let buy = makeActionButton(title: "解锁高级版", icon: "star.fill")
+        let buy = makeActionButton(title: NSLocalizedString("btn.unlock_pro", comment: ""), icon: "star.fill")
         buy.addTarget(self, action: #selector(purchaseTapped), for: .touchUpInside)
         buyButton = buy
 
-        let restore = makeActionButton(title: "恢复购买", icon: "arrow.clockwise")
+        let restore = makeActionButton(title: NSLocalizedString("btn.restore_purchase", comment: ""), icon: "arrow.clockwise")
         restore.addTarget(self, action: #selector(restoreTapped), for: .touchUpInside)
         restoreButton = restore
 
@@ -394,7 +394,9 @@ class SettingsViewController: UIViewController {
 
     private func syncIAPUI() {
         let isPro = settings.isProUser
-        iapStatusLabel?.text = isPro ? "✓  已解锁高级版" : "免费版  ·  还可录制 \(KeychainHelper.shared.remainingFreeRecordings) 次"
+        iapStatusLabel?.text = isPro
+            ? NSLocalizedString("iap.pro_unlocked", comment: "")
+            : String(format: NSLocalizedString("iap.free_remaining", comment: ""), KeychainHelper.shared.remainingFreeRecordings)
         iapStatusLabel?.textColor = isPro
             ? UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 1)
             : .white
@@ -418,14 +420,20 @@ class SettingsViewController: UIViewController {
     @objc private func purchaseTapped() {
         IAPManager.shared.onPurchaseSuccess = { [weak self] in
             self?.syncIAPUI()
-            let alert = UIAlertController(title: "解锁成功 🎉", message: "感谢支持！现在可以无限录制了。", preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "好的", style: .default))
+            let alert = UIAlertController(
+                title: NSLocalizedString("alert.unlock_success_title", comment: ""),
+                message: NSLocalizedString("alert.purchase_success_message", comment: ""),
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: NSLocalizedString("btn.ok", comment: ""), style: .default))
             self?.present(alert, animated: true)
         }
         IAPManager.shared.onPurchaseFailed = { [weak self] err in
             guard let err else { return } // 用户取消，不弹窗
-            let alert = UIAlertController(title: "购买失败", message: err.localizedDescription, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "好", style: .default))
+            let alert = UIAlertController(
+                title: NSLocalizedString("alert.purchase_failed", comment: ""),
+                message: err.localizedDescription,
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: NSLocalizedString("btn.ok", comment: ""), style: .default))
             self?.present(alert, animated: true)
         }
         IAPManager.shared.purchase()
@@ -434,19 +442,28 @@ class SettingsViewController: UIViewController {
     @objc private func restoreTapped() {
         IAPManager.shared.onPurchaseSuccess = { [weak self] in
             self?.syncIAPUI()
-            let alert = UIAlertController(title: "恢复成功", message: "已恢复高级版权益。", preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "好的", style: .default))
+            let alert = UIAlertController(
+                title: NSLocalizedString("alert.restore_success_title", comment: ""),
+                message: NSLocalizedString("alert.restore_success_message", comment: ""),
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: NSLocalizedString("btn.ok", comment: ""), style: .default))
             self?.present(alert, animated: true)
         }
         IAPManager.shared.onRestoreNotFound = { [weak self] in
-            let alert = UIAlertController(title: "未找到购买记录", message: "请确认使用了当初购买时的 Apple ID。", preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "好", style: .default))
+            let alert = UIAlertController(
+                title: NSLocalizedString("alert.restore_not_found_title", comment: ""),
+                message: NSLocalizedString("alert.restore_not_found_message", comment: ""),
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: NSLocalizedString("btn.ok", comment: ""), style: .default))
             self?.present(alert, animated: true)
         }
         IAPManager.shared.onPurchaseFailed = { [weak self] err in
             guard let err else { return }
-            let alert = UIAlertController(title: "恢复失败", message: err.localizedDescription, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "好", style: .default))
+            let alert = UIAlertController(
+                title: NSLocalizedString("alert.restore_failed", comment: ""),
+                message: err.localizedDescription,
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: NSLocalizedString("btn.ok", comment: ""), style: .default))
             self?.present(alert, animated: true)
         }
         IAPManager.shared.restore()
@@ -454,7 +471,7 @@ class SettingsViewController: UIViewController {
 
     @objc private func sendFeedback() {
         let email = "lava@mbjztech.cn"
-        let subject = "DuoVideo 反馈"
+        let subject = NSLocalizedString("feedback.email_subject", comment: "")
         if MFMailComposeViewController.canSendMail() {
             let vc = MFMailComposeViewController()
             vc.mailComposeDelegate = self
@@ -473,10 +490,11 @@ class SettingsViewController: UIViewController {
     private func validateAndSave() {
         let c = compositeRow.isOn, b = backRow.isOn, f = frontRow.isOn
         guard c || b || f else {
-            let alert = UIAlertController(title: "至少选择一种输出",
-                                          message: "合成视频、后摄和前摄至少保留一种",
-                                          preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "好", style: .default))
+            let alert = UIAlertController(
+                title: NSLocalizedString("alert.output_required_title", comment: ""),
+                message: NSLocalizedString("alert.output_required_message", comment: ""),
+                preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: NSLocalizedString("btn.ok", comment: ""), style: .default))
             present(alert, animated: true)
             syncFromSettings()
             return

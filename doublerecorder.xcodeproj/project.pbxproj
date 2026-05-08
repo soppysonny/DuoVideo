@@ -7,20 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		4D11A6AA5AF2F23C8195AD09 /* #{fw_name}.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4A33863835D7201068A3D760 /* #{fw_name}.framework */; };
-		B92D0E4D168BBC634E752C88 /* #{fw_name}.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C5CF476709B9F488DB11B69E /* #{fw_name}.framework */; };
-
 		900C8A2E2E4A408281DFA456 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07E15F7DF6B245CDB715BD4D /* StoreKit.framework */; };
 		DCE44C3CDD7E4FFB901DA39C /* MessageUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 659363DDD6F44604B144DA02 /* MessageUI.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		07E15F7DF6B245CDB715BD4D /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		4A33863835D7201068A3D760 /* #{fw_name}.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "#{fw_name}.framework"; path = "System/Library/Frameworks/#{fw_name}.framework"; sourceTree = SDKROOT; };
+		659363DDD6F44604B144DA02 /* MessageUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MessageUI.framework; path = System/Library/Frameworks/MessageUI.framework; sourceTree = SDKROOT; };
 		6BD050642FA883D500AECBF5 /* doublerecorder.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = doublerecorder.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C5CF476709B9F488DB11B69E /* #{fw_name}.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = "#{fw_name}.framework"; path = "System/Library/Frameworks/#{fw_name}.framework"; sourceTree = SDKROOT; };
-
-		07E15F7DF6B245CDB715BD4D /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
-		659363DDD6F44604B144DA02 /* MessageUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MessageUI.framework; path = System/Library/Frameworks/MessageUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -49,9 +45,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-							900C8A2E2E4A408281DFA456 /* StoreKit.framework in Frameworks */,
+				900C8A2E2E4A408281DFA456 /* StoreKit.framework in Frameworks */,
 				DCE44C3CDD7E4FFB901DA39C /* MessageUI.framework in Frameworks */,
-);
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
@@ -66,12 +62,22 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		5F3D4F3A2FAE05C800785B8F /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				07E15F7DF6B245CDB715BD4D /* StoreKit.framework */,
+				659363DDD6F44604B144DA02 /* MessageUI.framework */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
 		6BD0505B2FA883D500AECBF5 = {
 			isa = PBXGroup;
 			children = (
 				6BD050662FA883D500AECBF5 /* doublerecorder */,
 				6BD050652FA883D500AECBF5 /* Products */,
 				5EDF07D29BB960C7D2F40115 /* Frameworks */,
+				5F3D4F3A2FAE05C800785B8F /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -127,6 +133,7 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
 			);
 			mainGroup = 6BD0505B2FA883D500AECBF5;
 			minimizedProjectReferenceProxies = 1;
@@ -172,9 +179,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = doublerecorder/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Duo Video";
-				INFOPLIST_KEY_NSCameraUsageDescription = "需要访问前后摄像头进行双摄同步录像";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要访问麦克风以录制视频的音频轨道";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "需要将录制的视频保存到您的相册";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access is required for dual-camera synchronized recording";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone access is required to record audio with your videos";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Photo Library access is required to save your recordings";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;
@@ -206,9 +213,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = doublerecorder/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Duo Video";
-				INFOPLIST_KEY_NSCameraUsageDescription = "需要访问前后摄像头进行双摄同步录像";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "需要访问麦克风以录制视频的音频轨道";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "需要将录制的视频保存到您的相册";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Camera access is required for dual-camera synchronized recording";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Microphone access is required to record audio with your videos";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Photo Library access is required to save your recordings";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
 				INFOPLIST_KEY_UIMainStoryboardFile = Main;

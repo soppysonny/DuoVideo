@@ -1,0 +1,92 @@
+/* Buttons */
+"btn.ok" = "OK";
+"btn.cancel" = "Cancel";
+"btn.go_to_settings" = "Go to Settings";
+"btn.unlock_pro" = "Unlock Pro";
+"btn.restore_purchase" = "Restore";
+"btn.send_feedback" = "Send Feedback";
+
+/* Alerts */
+"alert.permission_title" = "Permission Required";
+"alert.permission_message" = "Please enable Camera, Microphone and Photo Library access in Settings";
+"alert.camera_init_failed" = "Camera Init Failed";
+"alert.quality_adjusted" = "Quality Auto-Adjusted";
+"alert.recording_start_failed" = "Recording Failed to Start";
+"alert.recording_failed" = "Recording Failed";
+"alert.export_failed" = "Export to Photos Failed";
+"alert.photo_failed" = "Photo Capture Failed";
+"alert.free_limit_title" = "Free Limit Reached";
+"alert.free_limit_message" = "The free version allows %d recordings. Unlock Pro for unlimited recording.";
+"alert.unlock_success_title" = "Unlock Successful 🎉";
+"alert.unlock_success_short" = "Unlimited recording is now available!";
+"alert.purchase_success_message" = "Thank you for your support! Unlimited recording is now available.";
+"alert.purchase_failed" = "Purchase Failed";
+"alert.restore_success_title" = "Restore Successful";
+"alert.restore_success_message" = "Pro benefits have been restored.";
+"alert.restore_not_found_title" = "No Purchase Found";
+"alert.restore_not_found_message" = "Please confirm you are using the same Apple ID as the original purchase.";
+"alert.restore_failed" = "Restore Failed";
+"alert.output_required_title" = "Select At Least One Output";
+"alert.output_required_message" = "Keep at least one of: composite, back cam, or front cam";
+
+/* Toast */
+"toast.ultrawide_not_supported" = "Ultra-wide dual recording not supported on this device";
+
+/* Not supported overlay */
+"device.not_supported" = "Your device does not support dual-camera recording\n(iPhone 11 Pro or later required)";
+
+/* Camera errors */
+"camera.back_unavailable" = "Back camera unavailable";
+"camera.front_unavailable" = "Front camera unavailable";
+"camera.ultrawide_unavailable" = "Ultra-wide camera unavailable";
+"camera.mic_unavailable" = "Microphone unavailable";
+"camera.cannot_add_back_input" = "Failed to add back camera input";
+"camera.cannot_add_back_output" = "Failed to add back camera output";
+"camera.cannot_get_back_port" = "Failed to get back camera port";
+"camera.cannot_connect_back" = "Failed to connect back camera";
+"camera.cannot_add_front_input" = "Failed to add front camera input";
+"camera.cannot_add_front_output" = "Failed to add front camera output";
+"camera.cannot_get_front_port" = "Failed to get front camera port";
+"camera.cannot_connect_front" = "Failed to connect front camera";
+"camera.cannot_add_ultrawide_input" = "Failed to add ultra-wide camera input";
+"camera.cannot_add_ultrawide_output" = "Failed to add ultra-wide camera output";
+"camera.cannot_get_ultrawide_port" = "Failed to get ultra-wide camera port";
+"camera.cannot_connect_ultrawide" = "Failed to connect ultra-wide camera";
+"camera.cannot_add_mic_input" = "Failed to add microphone input";
+"camera.cannot_add_audio_output" = "Failed to add audio output";
+"camera.cannot_get_mic_port" = "Failed to get microphone port";
+"camera.cannot_connect_audio" = "Failed to connect audio";
+"camera.back" = "Back";
+"camera.front" = "Front";
+"camera.fps_line" = "%@: %dfps → %dfps";
+"camera.quality_partial_prefix" = "Current settings not fully supported, auto-adjusted:\n";
+"camera.quality_fps_reduced" = "Settings exceed hardware limits, frame rate reduced to %dfps";
+
+/* Settings */
+"settings.title" = "SETTINGS";
+"section.iap" = "IN-APP PURCHASE";
+"section.capture_mode" = "CAPTURE MODE";
+"section.capture_mode_hint" = "Toggle to switch capture mode";
+"section.save_files" = "SAVE FILES";
+"section.recording_effects" = "RECORDING EFFECTS";
+"section.resolution" = "RESOLUTION";
+"section.frame_rate" = "FRAME RATE";
+"section.pip_camera" = "PiP CAMERA";
+"section.save" = "SAVE";
+"section.feedback" = "FEEDBACK";
+"toggle.composite_subtitle" = "Front & back PiP composite video";
+"toggle.back_cam_subtitle" = "Back camera independent video";
+"toggle.front_cam_subtitle" = "Front camera independent video";
+"toggle.mirror_subtitle" = "Mirror front camera recording";
+"toggle.autosave_subtitle" = "Auto save to Photos after recording";
+"pip.front" = "Front";
+"pip.back_wide" = "Rear Wide";
+"iap.description" = "One-time unlock, unlimited recording";
+"iap.pro_unlocked" = "✓  Pro Unlocked";
+"iap.free_remaining" = "Free  ·  %d recordings left";
+"feedback.email_subject" = "DuoVideo Feedback";
+
+/* Recordings list */
+"recordings.empty" = "No recordings yet";
+"recordings.delete" = "Delete";
+"recordings.title_count" = "RECORDINGS  ·  %d";

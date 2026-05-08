@@ -540,7 +540,7 @@ class ViewController: UIViewController {
             notSupportedView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
         ])
         let label = UILabel()
-        label.text = "您的设备不支持双摄录制\n（需要 iPhone 11 Pro 或更新机型）"
+        label.text = NSLocalizedString("device.not_supported", comment: "")
         label.textColor = .white
         label.font = .systemFont(ofSize: 17, weight: .medium)
         label.numberOfLines = 0
@@ -984,10 +984,10 @@ class ViewController: UIViewController {
                 }
                 mgr.onQualityReduced = { [weak self] message in
                     self?.syncHUDLabels()
-                    self?.showAlert(title: "画质已自动调整", message: message)
+                    self?.showAlert(title: NSLocalizedString("alert.quality_adjusted", comment: ""), message: message)
                 }
             case .failure(let err):
-                self.showAlert(title: "摄像头初始化失败", message: err.localizedDescription)
+                self.showAlert(title: NSLocalizedString("alert.camera_init_failed", comment: ""), message: err.localizedDescription)
             }
         }
     }
@@ -1038,7 +1038,7 @@ class ViewController: UIViewController {
             try videoRecorder.startRecording()
         } catch {
             lockedOrientation = nil
-            showAlert(title: "录制启动失败", message: error.localizedDescription)
+            showAlert(title: NSLocalizedString("alert.recording_start_failed", comment: ""), message: error.localizedDescription)
             return
         }
 
@@ -1056,25 +1056,27 @@ class ViewController: UIViewController {
     }
 
     private func showPaywall() {
-        let remaining = KeychainHelper.shared.remainingFreeRecordings
         let alert = UIAlertController(
-            title: "免费次数已用完",
-            message: "免费版可录制 \(KeychainHelper.freeLimit) 次，解锁高级版后即可无限录制。",
+            title: NSLocalizedString("alert.free_limit_title", comment: ""),
+            message: String(format: NSLocalizedString("alert.free_limit_message", comment: ""), KeychainHelper.freeLimit),
             preferredStyle: .alert
         )
-        alert.addAction(UIAlertAction(title: "解锁高级版", style: .default) { [weak self] _ in
+        alert.addAction(UIAlertAction(title: NSLocalizedString("btn.unlock_pro", comment: ""), style: .default) { [weak self] _ in
             IAPManager.shared.onPurchaseSuccess = { [weak self] in
-                let done = UIAlertController(title: "解锁成功 🎉", message: "现在可以无限录制了！", preferredStyle: .alert)
-                done.addAction(UIAlertAction(title: "好的", style: .default))
+                let done = UIAlertController(
+                    title: NSLocalizedString("alert.unlock_success_title", comment: ""),
+                    message: NSLocalizedString("alert.unlock_success_short", comment: ""),
+                    preferredStyle: .alert)
+                done.addAction(UIAlertAction(title: NSLocalizedString("btn.ok", comment: ""), style: .default))
                 self?.present(done, animated: true)
             }
             IAPManager.shared.onPurchaseFailed = { [weak self] err in
                 guard let err else { return }
-                self?.showAlert(title: "购买失败", message: err.localizedDescription)
+                self?.showAlert(title: NSLocalizedString("alert.purchase_failed", comment: ""), message: err.localizedDescription)
             }
             IAPManager.shared.purchase()
         })
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: NSLocalizedString("btn.cancel", comment: ""), style: .cancel))
         present(alert, animated: true)
     }
 
@@ -1100,7 +1102,7 @@ class ViewController: UIViewController {
 
             switch result {
             case .success(let session): self.saveSession(session)
-            case .failure(let err):    self.showAlert(title: "录制失败", message: err.localizedDescription)
+            case .failure(let err):    self.showAlert(title: NSLocalizedString("alert.recording_failed", comment: ""), message: err.localizedDescription)
             }
         }
     }
@@ -1112,7 +1114,7 @@ class ViewController: UIViewController {
         guard AppSettings.shared.autoSaveToPhotos else { return }
         photoExporter.exportSession(session) { [weak self] result in
             if case .failure(let err) = result {
-                self?.showAlert(title: "导出相册失败", message: err.localizedDescription)
+                self?.showAlert(title: NSLocalizedString("alert.export_failed", comment: ""), message: err.localizedDescription)
             }
         }
     }
@@ -1287,7 +1289,7 @@ class ViewController: UIViewController {
         guard videoRecorder.state != .recording else { return }
         if AppSettings.shared.pipCamera == .front {
             guard CameraManager.isUltraWideMultiCamSupported else {
-                showToast("当前设备不支持超广角双摄")
+                showToast(NSLocalizedString("toast.ultrawide_not_supported", comment: ""))
                 return
             }
             AppSettings.shared.pipCamera = .backUltraWide
@@ -1506,7 +1508,7 @@ class ViewController: UIViewController {
                 self?.recordButton.isEnabled = true
                 NotificationCenter.default.post(name: .recordingsChanged, object: nil)
                 if let e = saveError {
-                    self?.showAlert(title: "拍照失败", message: e.localizedDescription)
+                    self?.showAlert(title: NSLocalizedString("alert.photo_failed", comment: ""), message: e.localizedDescription)
                 }
             }
         }
@@ -1526,19 +1528,20 @@ class ViewController: UIViewController {
     }
 
     private func showPermissionDeniedAlert() {
-        let alert = UIAlertController(title: "需要权限",
-                                      message: "请在【设置】中开启摄像头、麦克风和相册权限",
-                                      preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "去设置", style: .default) { _ in
+        let alert = UIAlertController(
+            title: NSLocalizedString("alert.permission_title", comment: ""),
+            message: NSLocalizedString("alert.permission_message", comment: ""),
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: NSLocalizedString("btn.go_to_settings", comment: ""), style: .default) { _ in
             PermissionManager.shared.openAppSettings()
         })
-        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: NSLocalizedString("btn.cancel", comment: ""), style: .cancel))
         present(alert, animated: true)
     }
 
     private func showAlert(title: String, message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "好", style: .default))
+        alert.addAction(UIAlertAction(title: NSLocalizedString("btn.ok", comment: ""), style: .default))
         present(alert, animated: true)
     }
 

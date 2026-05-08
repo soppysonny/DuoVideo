@@ -1,0 +1,3 @@
+NSCameraUsageDescription = "需要访问前后摄像头进行双摄同步录像";
+NSMicrophoneUsageDescription = "需要访问麦克风以录制视频的音频轨道";
+NSPhotoLibraryAddUsageDescription = "需要将录制的视频保存到您的相册";

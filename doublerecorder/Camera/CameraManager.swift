@@ -186,12 +186,14 @@ class CameraManager: NSObject {
             let actual = applyFormat(targetWidth: res.targetWidth, fps: fps, to: device)
             minActualFps = min(minActualFps, actual)
             if actual < fps {
-                let name = device.position == .back ? "后摄" : "前摄"
-                lines.append("\(name)：\(fps)fps → \(actual)fps")
+                let name = device.position == .back
+                    ? NSLocalizedString("camera.back", comment: "")
+                    : NSLocalizedString("camera.front", comment: "")
+                lines.append(String(format: NSLocalizedString("camera.fps_line", comment: ""), name, fps, actual))
             }
         }
         if !lines.isEmpty {
-            pendingQualityMessage = "当前设置不完全受支持，已自动调整：\n" + lines.joined(separator: "\n")
+            pendingQualityMessage = NSLocalizedString("camera.quality_partial_prefix", comment: "") + lines.joined(separator: "\n")
             if let rate = AppSettings.FrameRate(rawValue: minActualFps) {
                 AppSettings.shared.frameRate = rate
             }
@@ -214,7 +216,7 @@ class CameraManager: NSObject {
             applyFormat(targetWidth: res.targetWidth, fps: fallbackFps, to: device)
         }
         session.commitConfiguration()
-        pendingQualityMessage = "当前设置超出硬件限制，帧率已自动降至 \(fallbackFps)fps"
+        pendingQualityMessage = String(format: NSLocalizedString("camera.quality_fps_reduced", comment: ""), fallbackFps)
         if let rate = AppSettings.FrameRate(rawValue: fallbackFps) {
             AppSettings.shared.frameRate = rate
         }
@@ -261,12 +263,12 @@ class CameraManager: NSObject {
     private func configureBackCamera() throws {
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera,
                                                    for: .video, position: .back) else {
-            throw CameraError.deviceUnavailable("后置摄像头不可用")
+            throw CameraError.deviceUnavailable(NSLocalizedString("camera.back_unavailable", comment: ""))
         }
         backDevice = device
         let input = try AVCaptureDeviceInput(device: device)
         guard session.canAddInput(input) else {
-            throw CameraError.cannotAddInput("无法添加后摄 input")
+            throw CameraError.cannotAddInput(NSLocalizedString("camera.cannot_add_back_input", comment: ""))
         }
         session.addInputWithNoConnections(input)
 
@@ -276,18 +278,18 @@ class CameraManager: NSObject {
         backVideoOutput.alwaysDiscardsLateVideoFrames = true
         backVideoOutput.setSampleBufferDelegate(self, queue: backOutputQueue)
         guard session.canAddOutput(backVideoOutput) else {
-            throw CameraError.cannotAddOutput("无法添加后摄 output")
+            throw CameraError.cannotAddOutput(NSLocalizedString("camera.cannot_add_back_output", comment: ""))
         }
         session.addOutputWithNoConnections(backVideoOutput)
 
         guard let inputPort = input.ports(for: .video,
                                           sourceDeviceType: device.deviceType,
                                           sourceDevicePosition: .back).first else {
-            throw CameraError.cannotAddInput("无法获取后摄 port")
+            throw CameraError.cannotAddInput(NSLocalizedString("camera.cannot_get_back_port", comment: ""))
         }
         let connection = AVCaptureConnection(inputPorts: [inputPort], output: backVideoOutput)
         guard session.canAddConnection(connection) else {
-            throw CameraError.cannotAddInput("无法建立后摄连接")
+            throw CameraError.cannotAddInput(NSLocalizedString("camera.cannot_connect_back", comment: ""))
         }
         session.addConnection(connection)
         connection.videoOrientation = .portrait
@@ -307,13 +309,13 @@ class CameraManager: NSObject {
     private func configureUltraWideCamera() throws {
         guard let device = AVCaptureDevice.default(.builtInUltraWideCamera,
                                                    for: .video, position: .back) else {
-            throw CameraError.deviceUnavailable("超广角摄像头不可用")
+            throw CameraError.deviceUnavailable(NSLocalizedString("camera.ultrawide_unavailable", comment: ""))
         }
         frontDevice = device
         isUsingFrontCamera = false
         let input = try AVCaptureDeviceInput(device: device)
         guard session.canAddInput(input) else {
-            throw CameraError.cannotAddInput("无法添加超广角 input")
+            throw CameraError.cannotAddInput(NSLocalizedString("camera.cannot_add_ultrawide_input", comment: ""))
         }
         session.addInputWithNoConnections(input)
 
@@ -323,18 +325,18 @@ class CameraManager: NSObject {
         frontVideoOutput.alwaysDiscardsLateVideoFrames = true
         frontVideoOutput.setSampleBufferDelegate(self, queue: frontOutputQueue)
         guard session.canAddOutput(frontVideoOutput) else {
-            throw CameraError.cannotAddOutput("无法添加超广角 output")
+            throw CameraError.cannotAddOutput(NSLocalizedString("camera.cannot_add_ultrawide_output", comment: ""))
         }
         session.addOutputWithNoConnections(frontVideoOutput)
 
         guard let inputPort = input.ports(for: .video,
                                           sourceDeviceType: device.deviceType,
                                           sourceDevicePosition: .back).first else {
-            throw CameraError.cannotAddInput("无法获取超广角 port")
+            throw CameraError.cannotAddInput(NSLocalizedString("camera.cannot_get_ultrawide_port", comment: ""))
         }
         let connection = AVCaptureConnection(inputPorts: [inputPort], output: frontVideoOutput)
         guard session.canAddConnection(connection) else {
-            throw CameraError.cannotAddInput("无法建立超广角连接")
+            throw CameraError.cannotAddInput(NSLocalizedString("camera.cannot_connect_ultrawide", comment: ""))
         }
         session.addConnection(connection)
         connection.videoOrientation = .portrait
@@ -362,13 +364,13 @@ class CameraManager: NSObject {
     private func configureFrontCamera() throws {
         guard let device = AVCaptureDevice.default(.builtInWideAngleCamera,
                                                    for: .video, position: .front) else {
-            throw CameraError.deviceUnavailable("前置摄像头不可用")
+            throw CameraError.deviceUnavailable(NSLocalizedString("camera.front_unavailable", comment: ""))
         }
         frontDevice = device
         isUsingFrontCamera = true
         let input = try AVCaptureDeviceInput(device: device)
         guard session.canAddInput(input) else {
-            throw CameraError.cannotAddInput("无法添加前摄 input")
+            throw CameraError.cannotAddInput(NSLocalizedString("camera.cannot_add_front_input", comment: ""))
         }
         session.addInputWithNoConnections(input)
 
@@ -378,18 +380,18 @@ class CameraManager: NSObject {
         frontVideoOutput.alwaysDiscardsLateVideoFrames = true
         frontVideoOutput.setSampleBufferDelegate(self, queue: frontOutputQueue)
         guard session.canAddOutput(frontVideoOutput) else {
-            throw CameraError.cannotAddOutput("无法添加前摄 output")
+            throw CameraError.cannotAddOutput(NSLocalizedString("camera.cannot_add_front_output", comment: ""))
         }
         session.addOutputWithNoConnections(frontVideoOutput)
 
         guard let inputPort = input.ports(for: .video,
                                           sourceDeviceType: device.deviceType,
                                           sourceDevicePosition: .front).first else {
-            throw CameraError.cannotAddInput("无法获取前摄 port")
+            throw CameraError.cannotAddInput(NSLocalizedString("camera.cannot_get_front_port", comment: ""))
         }
         let connection = AVCaptureConnection(inputPorts: [inputPort], output: frontVideoOutput)
         guard session.canAddConnection(connection) else {
-            throw CameraError.cannotAddInput("无法建立前摄连接")
+            throw CameraError.cannotAddInput(NSLocalizedString("camera.cannot_connect_front", comment: ""))
         }
         session.addConnection(connection)
         connection.videoOrientation = .portrait
@@ -417,28 +419,28 @@ class CameraManager: NSObject {
 
     private func configureMicrophone() throws {
         guard let device = AVCaptureDevice.default(for: .audio) else {
-            throw CameraError.deviceUnavailable("麦克风不可用")
+            throw CameraError.deviceUnavailable(NSLocalizedString("camera.mic_unavailable", comment: ""))
         }
         let input = try AVCaptureDeviceInput(device: device)
         guard session.canAddInput(input) else {
-            throw CameraError.cannotAddInput("无法添加麦克风 input")
+            throw CameraError.cannotAddInput(NSLocalizedString("camera.cannot_add_mic_input", comment: ""))
         }
         session.addInputWithNoConnections(input)
 
         audioOutput.setSampleBufferDelegate(self, queue: audioOutputQueue)
         guard session.canAddOutput(audioOutput) else {
-            throw CameraError.cannotAddOutput("无法添加音频 output")
+            throw CameraError.cannotAddOutput(NSLocalizedString("camera.cannot_add_audio_output", comment: ""))
         }
         session.addOutputWithNoConnections(audioOutput)
 
         guard let inputPort = input.ports(for: .audio,
                                           sourceDeviceType: device.deviceType,
                                           sourceDevicePosition: .unspecified).first else {
-            throw CameraError.cannotAddInput("无法获取麦克风 port")
+            throw CameraError.cannotAddInput(NSLocalizedString("camera.cannot_get_mic_port", comment: ""))
         }
         let connection = AVCaptureConnection(inputPorts: [inputPort], output: audioOutput)
         guard session.canAddConnection(connection) else {
-            throw CameraError.cannotAddInput("无法建立音频连接")
+            throw CameraError.cannotAddInput(NSLocalizedString("camera.cannot_connect_audio", comment: ""))
         }
         session.addConnection(connection)
     }
