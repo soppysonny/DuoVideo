@@ -355,21 +355,27 @@ class VideoRecorder {
             compositeAudioInput = makeAudioInput()
             if w.canAdd(compositeVideoInput!) { w.add(compositeVideoInput!) }
             if w.canAdd(compositeAudioInput!) { w.add(compositeAudioInput!) }
-            w.startWriting()
+            if !w.startWriting() {
+                print("[VideoRecorder] compositeWriter startWriting failed: \(w.error?.localizedDescription ?? "unknown")")
+            }
         }
         if let w = backWriter {
             backVideoInput = makeVideoInput(settings: videoSettings(width: back.width, height: back.height))
             backAudioInput = makeAudioInput()
             if w.canAdd(backVideoInput!) { w.add(backVideoInput!) }
             if w.canAdd(backAudioInput!) { w.add(backAudioInput!) }
-            w.startWriting()
+            if !w.startWriting() {
+                print("[VideoRecorder] backWriter startWriting failed: \(w.error?.localizedDescription ?? "unknown")")
+            }
         }
         if let w = frontWriter {
             frontVideoInput = makeVideoInput(settings: videoSettings(width: front.width, height: front.height))
             frontAudioInput = makeAudioInput()
             if w.canAdd(frontVideoInput!) { w.add(frontVideoInput!) }
             if w.canAdd(frontAudioInput!) { w.add(frontAudioInput!) }
-            w.startWriting()
+            if !w.startWriting() {
+                print("[VideoRecorder] frontWriter startWriting failed: \(w.error?.localizedDescription ?? "unknown")")
+            }
         }
 
         writersInitialized = true
@@ -513,7 +519,8 @@ class VideoRecorder {
             let base = file.deletingPathExtension().lastPathComponent
             guard base.hasPrefix(prefix) else { continue }
             let numPart = base.dropFirst(prefix.count)
-            if let n = Int(numPart), numPart == String(n) { maxNum = max(maxNum, n) }
+            guard !numPart.isEmpty, numPart.allSatisfy({ $0.isNumber }) else { continue }
+            if let n = Int(numPart) { maxNum = max(maxNum, n) }
         }
         let next = maxNum + 1
         return next <= 999 ? String(format: "\(prefix)%03d", next) : "\(prefix)\(next)"
