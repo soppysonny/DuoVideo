@@ -69,10 +69,15 @@ class VideoRecorder {
     func startRecording() throws {
         guard state == .idle else { throw RecorderError.alreadyRecording }
 
-        let timestamp = DateFormatter.fileTimestamp.string(from: Date())
-        compositeWriter = saveComposite ? try AVAssetWriter(url: makeOutputURL(suffix: "\(timestamp)-merged"), fileType: .mp4) : nil
-        backWriter      = saveBack      ? try AVAssetWriter(url: makeOutputURL(suffix: "\(timestamp)-back"),   fileType: .mp4) : nil
-        frontWriter     = saveFront     ? try AVAssetWriter(url: makeOutputURL(suffix: "\(timestamp)-front"),  fileType: .mp4) : nil
+        let dir = recordingsDir()
+        let backPrefix = pipCameraIsBack ? "wide" : "back"
+        let mergedName = Self.seqFilename(prefix: "merged", in: dir)
+        let backName   = Self.seqFilename(prefix: backPrefix, in: dir)
+        let frontName  = Self.seqFilename(prefix: "front", in: dir)
+
+        compositeWriter = saveComposite ? try AVAssetWriter(url: makeOutputURL(name: mergedName), fileType: .mp4) : nil
+        backWriter      = saveBack      ? try AVAssetWriter(url: makeOutputURL(name: backName),   fileType: .mp4) : nil
+        frontWriter     = saveFront     ? try AVAssetWriter(url: makeOutputURL(name: frontName),  fileType: .mp4) : nil
 
         writersInitialized = false
         backDimensions     = nil
@@ -488,11 +493,30 @@ class VideoRecorder {
         ]
     }
 
-    private func makeOutputURL(suffix: String) -> URL {
+    private func makeOutputURL(name: String) -> URL {
+        let dir = recordingsDir()
+        return dir.appendingPathComponent("\(name).mp4")
+    }
+
+    private func recordingsDir() -> URL {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Recordings", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("\(suffix).mp4")
+        return dir
+    }
+
+    static func seqFilename(prefix: String, in dir: URL) -> String {
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)) ?? []
+        var maxNum = 0
+        for file in files {
+            let base = file.deletingPathExtension().lastPathComponent
+            guard base.hasPrefix(prefix) else { continue }
+            let numPart = base.dropFirst(prefix.count)
+            if let n = Int(numPart), numPart == String(n) { maxNum = max(maxNum, n) }
+        }
+        let next = maxNum + 1
+        return next <= 999 ? String(format: "\(prefix)%03d", next) : "\(prefix)\(next)"
     }
 }
 
@@ -508,13 +532,4 @@ enum RecorderError: LocalizedError {
         case .writerSetupFailed(let m): return m
         }
     }
-}
-
-private extension DateFormatter {
-    static let fileTimestamp: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "yyyyMMddHHmmss"
-        return f
-    }()
 }

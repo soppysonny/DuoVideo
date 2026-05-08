@@ -7,19 +7,13 @@ class RecordingsListViewController: UIViewController {
     // MARK: - Data model
 
     struct VideoRecord {
-        let filename: String  // base name without extension, e.g. "20241205143022-merged"
+        let filename: String
         let date: Date
-        let type: String      // "merged", "back", "front"
+        let type: String      // "merged", "back", "front", "wide"
         let url: URL
         var durationSeconds: Int = 0
         var isPhoto: Bool = false
 
-        var displayTitle: String {
-            let df = DateFormatter()
-            df.locale = Locale(identifier: "en_US_POSIX")
-            df.dateFormat = "MM-dd  HH:mm:ss"
-            return df.string(from: date)
-        }
         var displayDuration: String {
             if isPhoto { return "—" }
             guard durationSeconds > 0 else { return "—" }
@@ -122,21 +116,21 @@ class RecordingsListViewController: UIViewController {
     func loadRecordings() {
         let dir = Self.recordingsDirectory()
         guard let files = try? FileManager.default.contentsOfDirectory(
-            at: dir, includingPropertiesForKeys: nil, options: .skipsHiddenFiles
+            at: dir, includingPropertiesForKeys: [.creationDateKey], options: .skipsHiddenFiles
         ) else { records = []; refresh(); return }
 
         var result: [VideoRecord] = []
         for url in files {
             let ext = url.pathExtension.lowercased()
             guard ext == "mp4" || ext == "jpg" else { continue }
-            // format: yyyyMMddHHmmss-type  e.g. 20241205143022-merged
-            let name = url.deletingPathExtension().lastPathComponent
-            guard let dash = name.firstIndex(of: "-") else { continue }
-            let ts   = String(name[name.startIndex ..< dash])
-            let type = String(name[name.index(after: dash)...])
-            guard ts.count == 14, !type.isEmpty else { continue }
-            let date = Self.parseDate(ts) ?? Date.distantPast
-            result.append(VideoRecord(filename: name, date: date, type: type, url: url, isPhoto: ext == "jpg"))
+            let base = url.deletingPathExtension().lastPathComponent
+            // format: prefix + digits, e.g. merged001, back012, wide003
+            guard let firstDigit = base.firstIndex(where: { $0.isNumber }) else { continue }
+            let prefix  = String(base[base.startIndex ..< firstDigit])
+            let numPart = String(base[firstDigit...])
+            guard !prefix.isEmpty, Int(numPart) != nil else { continue }
+            let date = (try? url.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? Date.distantPast
+            result.append(VideoRecord(filename: base, date: date, type: prefix, url: url, isPhoto: ext == "jpg"))
         }
         records = result.sorted { $0.date > $1.date }
 
@@ -181,13 +175,6 @@ class RecordingsListViewController: UIViewController {
             .appendingPathComponent("Recordings", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
-    }
-
-    private static func parseDate(_ ts: String) -> Date? {
-        let df = DateFormatter()
-        df.locale = Locale(identifier: "en_US_POSIX")
-        df.dateFormat = "yyyyMMddHHmmss"
-        return df.date(from: ts)
     }
 }
 
@@ -246,7 +233,6 @@ private final class VideoCell: UITableViewCell {
     private let playIcon        = UIImageView()
     private let mediaTypeBadge  = UIView()
     private let mediaTypeIcon   = UIImageView()
-    private let dateLabel       = UILabel()
     private let filenameLabel   = UILabel()
     private let durationLabel   = UILabel()
     private let typeBadge       = UIView()
@@ -293,13 +279,8 @@ private final class VideoCell: UITableViewCell {
         mediaTypeIcon.translatesAutoresizingMaskIntoConstraints = false
         mediaTypeBadge.addSubview(mediaTypeIcon)
 
-        dateLabel.font      = UIFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
-        dateLabel.textColor = .white
-        dateLabel.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(dateLabel)
-
-        filenameLabel.font      = UIFont.monospacedSystemFont(ofSize: 9, weight: .regular)
-        filenameLabel.textColor = UIColor.white.withAlphaComponent(0.38)
+        filenameLabel.font      = UIFont.monospacedSystemFont(ofSize: 13, weight: .semibold)
+        filenameLabel.textColor = .white
         filenameLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(filenameLabel)
 
@@ -344,11 +325,8 @@ private final class VideoCell: UITableViewCell {
             mediaTypeIcon.centerXAnchor.constraint(equalTo: mediaTypeBadge.centerXAnchor),
             mediaTypeIcon.centerYAnchor.constraint(equalTo: mediaTypeBadge.centerYAnchor),
 
-            dateLabel.leadingAnchor.constraint(equalTo: thumbBG.trailingAnchor, constant: 12),
-            dateLabel.topAnchor.constraint(equalTo: thumbBG.topAnchor, constant: 4),
-
             filenameLabel.leadingAnchor.constraint(equalTo: thumbBG.trailingAnchor, constant: 12),
-            filenameLabel.topAnchor.constraint(equalTo: dateLabel.bottomAnchor, constant: 4),
+            filenameLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
 
             durationLabel.leadingAnchor.constraint(equalTo: thumbBG.trailingAnchor, constant: 12),
             durationLabel.bottomAnchor.constraint(equalTo: thumbBG.bottomAnchor, constant: -4),
@@ -366,19 +344,20 @@ private final class VideoCell: UITableViewCell {
     required init?(coder: NSCoder) { fatalError() }
 
     func configure(with record: RecordingsListViewController.VideoRecord) {
-        dateLabel.text     = record.displayTitle
         filenameLabel.text = record.filename
         durationLabel.text = record.displayDuration
 
-        let amber = UIColor(red: 1,     green: 0.698, blue: 0.247, alpha: 1)
-        let green = UIColor(red: 0.204, green: 0.78,  blue: 0.349, alpha: 1)
-        let blue  = UIColor(red: 0.4,   green: 0.7,   blue: 1.0,   alpha: 1)
+        let amber  = UIColor(red: 1,     green: 0.698, blue: 0.247, alpha: 1)
+        let green  = UIColor(red: 0.204, green: 0.78,  blue: 0.349, alpha: 1)
+        let blue   = UIColor(red: 0.4,   green: 0.7,   blue: 1.0,   alpha: 1)
+        let purple = UIColor(red: 0.8,   green: 0.5,   blue: 1.0,   alpha: 1)
 
         let color: UIColor
         switch record.type {
         case "merged": color = amber
         case "back":   color = green
         case "front":  color = blue
+        case "wide":   color = purple
         default:       color = UIColor.white.withAlphaComponent(0.6)
         }
         typeBadgeLbl.text         = record.typeDisplay

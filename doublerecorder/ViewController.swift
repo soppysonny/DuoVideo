@@ -1412,16 +1412,17 @@ class ViewController: UIViewController {
                                        back: CVPixelBuffer?,
                                        front: CVPixelBuffer?) {
         let settings = AppSettings.shared
+        let backPrefix = videoRecorder.pipCameraIsBack ? "wide" : "back"
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             let ctx = CIContext(options: [.useSoftwareRenderer: false])
-            var pairs: [(UIImage, String)] = []  // (image, type)
+            var pairs: [(UIImage, String)] = []  // (image, prefix)
 
             if let buf = composite, let img = self.cvBufferToImage(buf, context: ctx) {
                 pairs.append((img, "merged"))
             }
             if settings.saveBack, let buf = back,
-               let img = self.cvBufferToImage(buf, context: ctx) { pairs.append((img, "back")) }
+               let img = self.cvBufferToImage(buf, context: ctx) { pairs.append((img, backPrefix)) }
             if settings.saveFront, let buf = front,
                let img = self.cvBufferToImage(buf, context: ctx) { pairs.append((img, "front")) }
 
@@ -1431,13 +1432,10 @@ class ViewController: UIViewController {
             }
 
             // 保存到本地 Recordings 目录供应用内画廊使用
-            let tsFormatter = DateFormatter()
-            tsFormatter.locale = Locale(identifier: "en_US_POSIX")
-            tsFormatter.dateFormat = "yyyyMMddHHmmss"
-            let ts = tsFormatter.string(from: Date())
             let dir = RecordingsListViewController.recordingsDirectory()
-            for (img, type) in pairs {
-                let url = dir.appendingPathComponent("\(ts)-\(type).jpg")
+            for (img, prefix) in pairs {
+                let name = VideoRecorder.seqFilename(prefix: prefix, in: dir)
+                let url = dir.appendingPathComponent("\(name).jpg")
                 if let data = img.jpegData(compressionQuality: 0.92) {
                     try? data.write(to: url)
                 }
