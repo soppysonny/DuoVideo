@@ -540,6 +540,7 @@ private final class VideoShareOverlayController: UIViewController {
     }
 
     @objc private func shareTapped() {
+        AnalyticsManager.logShare(contentType: "video")
         let ac = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
         ac.popoverPresentationController?.sourceView = view
         present(ac, animated: true)
@@ -615,6 +616,7 @@ private final class PhotoViewerController: UIViewController {
     @objc private func closeTapped() { dismiss(animated: true) }
 
     @objc private func shareTapped() {
+        AnalyticsManager.logShare(contentType: "photo")
         let ac = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
         ac.popoverPresentationController?.sourceView = view
         present(ac, animated: true)

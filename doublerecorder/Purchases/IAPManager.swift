@@ -17,9 +17,12 @@ final class IAPManager: NSObject {
     /// 恢复完成但未找到该产品时回调
     var onRestoreNotFound: (() -> Void)?
 
+    private(set) var priceString: String?
+
     private override init() {
         super.init()
         SKPaymentQueue.default().add(self)
+        fetchProduct()
     }
 
     deinit {
@@ -71,6 +74,13 @@ extension IAPManager: SKProductsRequestDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.product = response.products.first
+            if let p = self.product {
+                let fmt = NumberFormatter()
+                fmt.numberStyle = .currency
+                fmt.locale = p.priceLocale
+                self.priceString = fmt.string(from: p.price)
+                NotificationCenter.default.post(name: .iapProductLoaded, object: nil)
+            }
             if self.pendingPurchase, let product = self.product {
                 self.pendingPurchase = false
                 let payment = SKPayment(product: product)

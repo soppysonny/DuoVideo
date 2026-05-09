@@ -9,4 +9,8 @@ struct RecordingSession {
     let frontVideoURL: URL?
 
     var duration: TimeInterval { endDate.timeIntervalSince(startDate) }
+
+    var fileCount: Int {
+        [compositeVideoURL, backVideoURL, frontVideoURL].compactMap { $0 }.count
+    }
 }

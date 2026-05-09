@@ -3,6 +3,7 @@
 "btn.cancel" = "Cancel";
 "btn.go_to_settings" = "Go to Settings";
 "btn.unlock_pro" = "Unlock Pro";
+"btn.unlock_pro_price" = "Unlock Pro · %@";
 "btn.restore_purchase" = "Restore";
 "btn.send_feedback" = "Send Feedback";
 

@@ -1008,7 +1008,16 @@ class ViewController: UIViewController {
 
     @objc private func recordButtonTapped() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-        if AppSettings.shared.captureMode == .photo {
+        let s = AppSettings.shared
+        let isPhoto = s.captureMode == .photo
+        AnalyticsManager.logCaptureTap(
+            isPhoto: isPhoto,
+            resolution: s.videoResolution.hudLabel,
+            frameRate: s.frameRate.hudLabel,
+            isMirror: isFrontMirror,
+            pipCamera: s.pipCamera == .front ? "front" : "back_wide"
+        )
+        if isPhoto {
             takePhoto()
             return
         }
@@ -1044,6 +1053,14 @@ class ViewController: UIViewController {
 
         KeychainHelper.shared.incrementRecordingCount()
 
+        let s = AppSettings.shared
+        AnalyticsManager.logRecordingStart(
+            resolution: s.videoResolution.hudLabel,
+            frameRate: s.frameRate.hudLabel,
+            isMirror: isFrontMirror,
+            pipCamera: s.pipCamera == .front ? "front" : "back_wide"
+        )
+
         recordButton.isRecording = true
         setRecordingUI(true)
         startTimer()
@@ -1062,7 +1079,9 @@ class ViewController: UIViewController {
             preferredStyle: .alert
         )
         alert.addAction(UIAlertAction(title: NSLocalizedString("btn.unlock_pro", comment: ""), style: .default) { [weak self] _ in
+            AnalyticsManager.logPurchaseClick()
             IAPManager.shared.onPurchaseSuccess = { [weak self] in
+                AnalyticsManager.logPurchaseOK()
                 let done = UIAlertController(
                     title: NSLocalizedString("alert.unlock_success_title", comment: ""),
                     message: NSLocalizedString("alert.unlock_success_short", comment: ""),
@@ -1101,7 +1120,9 @@ class ViewController: UIViewController {
             self.setRecordingUI(false)
 
             switch result {
-            case .success(let session): self.saveSession(session)
+            case .success(let session):
+                AnalyticsManager.logRecordingStop(durationSeconds: self.recordingSeconds, fileCount: session.fileCount)
+                self.saveSession(session)
             case .failure(let err):    self.showAlert(title: NSLocalizedString("alert.recording_failed", comment: ""), message: err.localizedDescription)
             }
         }
@@ -1299,6 +1320,7 @@ class ViewController: UIViewController {
             pipDockBtn.backgroundColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 0.25)
             pipDockBtn.layer.borderColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 0.6).cgColor
             (view.viewWithTag(703) as? UILabel)?.text = "WIDE"
+            AnalyticsManager.logConfigChanged(key: "pip_camera", value: "back_wide")
         } else {
             AppSettings.shared.pipCamera = .front
             pipCamBtn.isActive = false
@@ -1307,6 +1329,7 @@ class ViewController: UIViewController {
             pipDockBtn.backgroundColor = UIColor(white: 0.08, alpha: 0.6)
             pipDockBtn.layer.borderColor = UIColor.white.withAlphaComponent(0.18).cgColor
             (view.viewWithTag(703) as? UILabel)?.text = "PiP"
+            AnalyticsManager.logConfigChanged(key: "pip_camera", value: "front")
         }
         rebuildCamera()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -1315,6 +1338,7 @@ class ViewController: UIViewController {
     @objc private func handleMirror() {
         AppSettings.shared.recordMirrored = !isFrontMirror
         applyMirrorState()
+        AnalyticsManager.logConfigChanged(key: "mirror", value: "\(AppSettings.shared.recordMirrored)")
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
@@ -1376,7 +1400,9 @@ class ViewController: UIViewController {
 
     @objc private func handleCaptureMode() {
         let current = AppSettings.shared.captureMode
-        AppSettings.shared.captureMode = current == .video ? .photo : .video
+        let next: AppSettings.CaptureMode = current == .video ? .photo : .video
+        AppSettings.shared.captureMode = next
+        AnalyticsManager.logConfigChanged(key: "capture_mode", value: next.rawValue)
         NotificationCenter.default.post(name: .captureModeChanged, object: nil)
     }
 

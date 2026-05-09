@@ -3,6 +3,7 @@
 "btn.cancel" = "取消";
 "btn.go_to_settings" = "去设置";
 "btn.unlock_pro" = "解锁高级版";
+"btn.unlock_pro_price" = "解锁高级版 · %@";
 "btn.restore_purchase" = "恢复购买";
 "btn.send_feedback" = "发送反馈邮件";
 

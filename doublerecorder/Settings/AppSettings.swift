@@ -102,4 +102,5 @@ extension Notification.Name {
     static let captureModeChanged   = Notification.Name("captureModeChanged")
     static let recordMirrorChanged  = Notification.Name("recordMirrorChanged")
     static let pipCameraChanged     = Notification.Name("pipCameraChanged")
+    static let iapProductLoaded     = Notification.Name("iapProductLoaded")
 }

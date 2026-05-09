@@ -20,6 +20,7 @@ class SettingsViewController: UIViewController {
     // IAP state
     private var iapStatusLabel: UILabel?
     private var buyButton: UIButton?
+    private var buyButtonLabel: UILabel?
     private var restoreButton: UIButton?
 
     // MARK: - Lifecycle
@@ -29,6 +30,9 @@ class SettingsViewController: UIViewController {
         view.backgroundColor = UIColor(white: 0.06, alpha: 1)
         buildUI()
         syncFromSettings()
+        updateBuyButtonPrice()
+        NotificationCenter.default.addObserver(self, selector: #selector(handleProductLoaded),
+                                               name: .iapProductLoaded, object: nil)
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
@@ -168,6 +172,7 @@ class SettingsViewController: UIViewController {
             tile.onTap = { [weak self] in
                 self?.settings.videoResolution = res
                 self?.syncResTiles()
+                AnalyticsManager.logConfigChanged(key: "resolution", value: res.rawValue)
             }
             resTiles.append(tile)
             resRow.addArrangedSubview(tile)
@@ -191,6 +196,7 @@ class SettingsViewController: UIViewController {
             tile.onTap = { [weak self] in
                 self?.settings.frameRate = rate
                 self?.syncFpsTiles()
+                AnalyticsManager.logConfigChanged(key: "frame_rate", value: "\(rate.rawValue)")
             }
             fpsTiles.append(tile)
             fpsRow.addArrangedSubview(tile)
@@ -213,6 +219,7 @@ class SettingsViewController: UIViewController {
             tile.onTap = { [weak self] in
                 self?.settings.pipCamera = cam
                 self?.syncPipTiles()
+                AnalyticsManager.logConfigChanged(key: "pip_camera", value: cam.rawValue)
                 NotificationCenter.default.post(name: .pipCameraChanged, object: nil)
             }
             pipTiles.append(tile)
@@ -335,6 +342,10 @@ class SettingsViewController: UIViewController {
         let buy = makeActionButton(title: NSLocalizedString("btn.unlock_pro", comment: ""), icon: "star.fill")
         buy.addTarget(self, action: #selector(purchaseTapped), for: .touchUpInside)
         buyButton = buy
+        if let stack = buy.subviews.first(where: { $0 is UIStackView }) as? UIStackView,
+           let label = stack.arrangedSubviews.last(where: { $0 is UILabel }) as? UILabel {
+            buyButtonLabel = label
+        }
 
         let restore = makeActionButton(title: NSLocalizedString("btn.restore_purchase", comment: ""), icon: "arrow.clockwise")
         restore.addTarget(self, action: #selector(restoreTapped), for: .touchUpInside)
@@ -406,6 +417,15 @@ class SettingsViewController: UIViewController {
         restoreButton?.alpha     = isPro ? 0.35 : 1.0
     }
 
+    @objc private func handleProductLoaded() {
+        updateBuyButtonPrice()
+    }
+
+    private func updateBuyButtonPrice() {
+        guard let price = IAPManager.shared.priceString, !settings.isProUser else { return }
+        buyButtonLabel?.text = String(format: NSLocalizedString("btn.unlock_pro_price", comment: ""), price)
+    }
+
     // MARK: - Actions
 
     @objc private func closeTapped() {
@@ -413,12 +433,16 @@ class SettingsViewController: UIViewController {
     }
 
     @objc private func modeChanged() {
-        settings.captureMode = modeSegment.selectedSegmentIndex == 0 ? .video : .photo
+        let mode: AppSettings.CaptureMode = modeSegment.selectedSegmentIndex == 0 ? .video : .photo
+        settings.captureMode = mode
+        AnalyticsManager.logConfigChanged(key: "capture_mode", value: mode.rawValue)
         NotificationCenter.default.post(name: .captureModeChanged, object: nil)
     }
 
     @objc private func purchaseTapped() {
+        AnalyticsManager.logPurchaseClick()
         IAPManager.shared.onPurchaseSuccess = { [weak self] in
+            AnalyticsManager.logPurchaseOK()
             self?.syncIAPUI()
             let alert = UIAlertController(
                 title: NSLocalizedString("alert.unlock_success_title", comment: ""),
@@ -440,7 +464,9 @@ class SettingsViewController: UIViewController {
     }
 
     @objc private func restoreTapped() {
+        AnalyticsManager.logPurchaseClick()
         IAPManager.shared.onPurchaseSuccess = { [weak self] in
+            AnalyticsManager.logPurchaseOK()
             self?.syncIAPUI()
             let alert = UIAlertController(
                 title: NSLocalizedString("alert.restore_success_title", comment: ""),
