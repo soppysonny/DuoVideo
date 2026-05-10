@@ -737,9 +737,11 @@ class ViewController: UIViewController {
         guard !pipIsDragging else { return }
 
         // pipFrameAspect 随 videoOrientation 变化（竖屏=9/16，横屏=16/9）。
-        // 取 min(r, 1/r) 将其标准化为竖屏基准比（始终 ≤ 1），使公式不依赖缓冲区旋转方向。
+        // 裁剪后有效宽高比 = 原始宽高比 × 裁剪宽高比
         let rawAspect = videoRecorder.pipFrameAspect ?? (9.0 / 16.0)
-        let portraitAspect = min(rawAspect, 1.0 / rawAspect)
+        let crop = AppSettings.shared.pipCropRect
+        let effectiveAspect = rawAspect * crop.width / crop.height
+        let portraitAspect = min(effectiveAspect, 1.0 / effectiveAspect)
         let pipW: CGFloat
         let pipH: CGFloat
         if isLandscape {
@@ -1564,7 +1566,7 @@ class ViewController: UIViewController {
 
     private func applyPiPCropState() {
         let cropRect = AppSettings.shared.pipCropRect
-        frontPreviewView.visibleRect = isSwapped ? .fullFrame : cropRect
+        frontPreviewView.visibleRect = cropRect
         videoRecorder.updatePiPCropRect(cropRect)
         videoRecorder.updateFrontMirror(isFrontMirror)
     }

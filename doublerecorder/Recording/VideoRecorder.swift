@@ -293,11 +293,14 @@ class VideoRecorder {
             let normOriginX = (ox + cropX) / (scale * bW)
             let normOriginY = (oy + cropY) / (scale * bH)
 
-            // 宽度由屏幕 PiP 宽精确映射；高度按前后摄宽高比推算，保证前摄内容无失真
+            // 宽度由屏幕 PiP 宽精确映射；高度按前后摄宽高比及裁剪比推算
             let normW = pw / (scale * bW)
             let fW = rawFW.map(Float.init) ?? bW
             let fH = rawFH.map(Float.init) ?? bH
-            let normH = normW * bH * fW / (bW * fH)
+            let cropRect = AppSettings.shared.pipCropRect
+            let cropW = Float(cropRect.width)
+            let cropH = Float(cropRect.height)
+            let normH = normW * bH * fW * cropH / (bW * fH * cropW)
 
             // 防止 PiP 超出视频帧边界
             comp.params.pipOriginX = min(max(normOriginX, 0), max(1.0 - normW, 0))
@@ -305,9 +308,10 @@ class VideoRecorder {
             comp.params.pipWidth   = normW
             comp.params.pipHeight  = normH
         } else {
-            // 帧尺寸未知时回退：使用屏幕归一化值（Y 轴按高填充时与视频坐标一致）
+            // 帧尺寸未知时回退：使用屏幕归一化值，以裁剪宽高比修正高度
             let normW = pw / sW
-            let normH = normW  // 无帧尺寸时假设前后摄宽高比相同
+            let crop = AppSettings.shared.pipCropRect
+            let normH = normW * Float(crop.height) / Float(crop.width)
             comp.params.pipOriginX = min(max(ox / sW, 0), max(1.0 - normW, 0))
             comp.params.pipOriginY = min(max(oy / sH, 0), max(1.0 - normH, 0))
             comp.params.pipWidth   = normW
