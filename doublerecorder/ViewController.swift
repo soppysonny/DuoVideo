@@ -128,6 +128,8 @@ class ViewController: UIViewController {
                                                name: .recordMirrorChanged, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(pipCameraSettingChanged),
                                                name: .pipCameraChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(pipCropChanged),
+                                               name: .pipCropChanged, object: nil)
         setupUI()
         checkSupportAndRequestPermissions()
     }
@@ -325,6 +327,7 @@ class ViewController: UIViewController {
         pipContainerView.addGestureRecognizer(pan)
 
         // clipsToBounds must stay true for corner rounding; shadow is achieved via border only
+        applyPiPCropState()
     }
 
     // MARK: - Top HUD Setup
@@ -977,6 +980,8 @@ class ViewController: UIViewController {
                 self.applyPiPCameraSettings()
                 mgr.startRunning()
                 self.applyMirrorState()
+                self.videoRecorder.updateFrontMirror(self.isFrontMirror)
+                self.applyPiPCropState()
                 self.syncOrientationIfNeeded()
                 self.videoRecorder.onFirstFrontFrame = { [weak self] in
                     guard let self else { return }
@@ -1338,6 +1343,7 @@ class ViewController: UIViewController {
     @objc private func handleMirror() {
         AppSettings.shared.recordMirrored = !isFrontMirror
         applyMirrorState()
+        videoRecorder.updateFrontMirror(isFrontMirror)
         AnalyticsManager.logConfigChanged(key: "mirror", value: "\(AppSettings.shared.recordMirrored)")
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
@@ -1375,6 +1381,7 @@ class ViewController: UIViewController {
             if let bl { backPreviewView.attachPreviewLayer(bl) }
             if let fl { frontPreviewView.attachPreviewLayer(fl) }
         }
+        applyPiPCropState()
 
         UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0) {
             self.swapBtn.transform = self.isSwapped
@@ -1385,9 +1392,12 @@ class ViewController: UIViewController {
     }
 
     @objc private func handleSettings() {
-        cameraManager?.stopRunning()
         let vc = SettingsViewController()
         vc.modalPresentationStyle = .fullScreen
+        vc.onEditPiPCrop = { [weak self, weak vc] in
+            guard let self, let vc else { return }
+            self.presentPiPCropEditor(from: vc)
+        }
         present(vc, animated: true)
     }
 
@@ -1408,6 +1418,10 @@ class ViewController: UIViewController {
 
     @objc private func recordingsChanged() {
         refreshGalleryBadge()
+    }
+
+    @objc private func pipCropChanged() {
+        applyPiPCropState()
     }
 
     @objc private func recordMirrorChanged() {
@@ -1546,6 +1560,33 @@ class ViewController: UIViewController {
         return UIImage(cgImage: cg)
     }
 
+    // MARK: - PiP Crop
+
+    private func applyPiPCropState() {
+        let cropRect = AppSettings.shared.pipCropRect
+        frontPreviewView.visibleRect = isSwapped ? .fullFrame : cropRect
+        videoRecorder.updatePiPCropRect(cropRect)
+        videoRecorder.updateFrontMirror(isFrontMirror)
+    }
+
+    private func presentPiPCropEditor(from presenter: UIViewController) {
+        guard let layer = frontPreviewView.detach() else {
+            showAlert(on: presenter, title: "暂无前摄画面", message: "请返回主界面等待前摄预览出现后再设置 PiP 范围")
+            return
+        }
+
+        let editor = PiPCropEditorViewController(previewLayer: layer, initialCropRect: AppSettings.shared.pipCropRect)
+        editor.onSave = { rect in
+            AppSettings.shared.pipCropRect = rect
+            NotificationCenter.default.post(name: .pipCropChanged, object: nil)
+        }
+        editor.onDismiss = { [weak self] in
+            self?.frontPreviewView.attachPreviewLayer(layer)
+            self?.applyPiPCropState()
+        }
+        presenter.present(editor, animated: true)
+    }
+
     // MARK: - Not supported / alerts
 
     private func showNotSupported() {
@@ -1566,9 +1607,13 @@ class ViewController: UIViewController {
     }
 
     private func showAlert(title: String, message: String) {
+        showAlert(on: self, title: title, message: message)
+    }
+
+    private func showAlert(on presenter: UIViewController, title: String, message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: NSLocalizedString("btn.ok", comment: ""), style: .default))
-        present(alert, animated: true)
+        presenter.present(alert, animated: true)
     }
 
     func showToast(_ message: String) {

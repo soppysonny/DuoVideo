@@ -5,6 +5,7 @@ import MessageUI
 class SettingsViewController: UIViewController {
 
     private let settings = AppSettings.shared
+    var onEditPiPCrop: (() -> Void)?
 
     private let modeSegment  = UISegmentedControl(items: ["VIDEO", "PHOTO"])
     private let compositeRow = SettingsToggleRow(title: "COMPOSITE", subtitle: NSLocalizedString("toggle.composite_subtitle", comment: ""))
@@ -12,6 +13,8 @@ class SettingsViewController: UIViewController {
     private let frontRow     = SettingsToggleRow(title: "FRONT CAM", subtitle: NSLocalizedString("toggle.front_cam_subtitle", comment: ""))
     private let mirrorRow    = SettingsToggleRow(title: "MIRROR",    subtitle: NSLocalizedString("toggle.mirror_subtitle", comment: ""))
     private let autoSaveRow  = SettingsToggleRow(title: "AUTO SAVE", subtitle: NSLocalizedString("toggle.autosave_subtitle", comment: ""))
+    private let pipCropRow   = SettingsActionRow(title: NSLocalizedString("pip_crop.title", comment: ""),
+                                                  subtitle: NSLocalizedString("pip_crop.subtitle", comment: ""))
 
     private var resTiles: [OptionTile] = []
     private var fpsTiles: [OptionTile] = []
@@ -33,6 +36,11 @@ class SettingsViewController: UIViewController {
         updateBuyButtonPrice()
         NotificationCenter.default.addObserver(self, selector: #selector(handleProductLoaded),
                                                name: .iapProductLoaded, object: nil)
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        syncFromSettings()
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
@@ -142,6 +150,15 @@ class SettingsViewController: UIViewController {
             vStack.addArrangedSubview(row)
             vStack.setCustomSpacing(i < toggleRows.count - 1 ? 1 : 32, after: row)
         }
+
+        // ── PiP 窗口裁剪 ─────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.pip_window", comment: "")))
+        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
+
+        pipCropRow.onTap = { [weak self] in self?.onEditPiPCrop?() }
+        pipCropRow.heightAnchor.constraint(equalToConstant: 64).isActive = true
+        vStack.addArrangedSubview(pipCropRow)
+        vStack.setCustomSpacing(32, after: pipCropRow)
 
         // ── 录制效果 ──────────────────────────────────────────
         vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.recording_effects", comment: "")))
@@ -289,6 +306,9 @@ class SettingsViewController: UIViewController {
         frontRow.isOn     = settings.saveFront
         mirrorRow.isOn    = settings.recordMirrored
         autoSaveRow.isOn  = settings.autoSaveToPhotos
+        pipCropRow.detailText = settings.pipCropRect.isFullFrame
+            ? NSLocalizedString("pip_crop.full_frame", comment: "")
+            : NSLocalizedString("pip_crop.custom", comment: "")
         syncResTiles()
         syncFpsTiles()
         syncPipTiles()
@@ -670,4 +690,86 @@ private final class OptionTile: UIView {
             subLbl.textColor   = UIColor.white.withAlphaComponent(0.35)
         }
     }
+}
+
+// MARK: - SettingsActionRow
+
+final class SettingsActionRow: UIControl {
+
+    var detailText: String = "" {
+        didSet { detailLabel.text = detailText }
+    }
+
+    var onTap: (() -> Void)?
+
+    private let bg = UIView()
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let detailLabel = UILabel()
+    private let chevronView = UIImageView(image: UIImage(systemName: "chevron.right"))
+
+    init(title: String, subtitle: String) {
+        super.init(frame: .zero)
+
+        bg.isUserInteractionEnabled = false
+        bg.backgroundColor = UIColor(white: 0.13, alpha: 1)
+        bg.layer.cornerRadius = 12
+        bg.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(bg)
+
+        titleLabel.text = title
+        titleLabel.font = UIFont.monospacedSystemFont(ofSize: 12, weight: .semibold)
+        titleLabel.textColor = .white
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        bg.addSubview(titleLabel)
+
+        subtitleLabel.text = subtitle
+        subtitleLabel.font = UIFont.systemFont(ofSize: 11)
+        subtitleLabel.textColor = UIColor.white.withAlphaComponent(0.40)
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        bg.addSubview(subtitleLabel)
+
+        detailLabel.font = UIFont.monospacedSystemFont(ofSize: 10, weight: .semibold)
+        detailLabel.textColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 1)
+        detailLabel.translatesAutoresizingMaskIntoConstraints = false
+        bg.addSubview(detailLabel)
+
+        chevronView.tintColor = UIColor.white.withAlphaComponent(0.35)
+        chevronView.translatesAutoresizingMaskIntoConstraints = false
+        bg.addSubview(chevronView)
+
+        NSLayoutConstraint.activate([
+            bg.topAnchor.constraint(equalTo: topAnchor),
+            bg.bottomAnchor.constraint(equalTo: bottomAnchor),
+            bg.leadingAnchor.constraint(equalTo: leadingAnchor),
+            bg.trailingAnchor.constraint(equalTo: trailingAnchor),
+
+            titleLabel.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 16),
+            titleLabel.topAnchor.constraint(equalTo: bg.topAnchor, constant: 13),
+
+            subtitleLabel.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 16),
+            subtitleLabel.bottomAnchor.constraint(equalTo: bg.bottomAnchor, constant: -12),
+
+            chevronView.centerYAnchor.constraint(equalTo: bg.centerYAnchor),
+            chevronView.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -16),
+            chevronView.widthAnchor.constraint(equalToConstant: 10),
+
+            detailLabel.centerYAnchor.constraint(equalTo: bg.centerYAnchor),
+            detailLabel.trailingAnchor.constraint(equalTo: chevronView.leadingAnchor, constant: -10),
+        ])
+
+        addTarget(self, action: #selector(handleTap), for: .touchUpInside)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var isHighlighted: Bool {
+        didSet {
+            UIView.animate(withDuration: 0.12) {
+                self.bg.alpha = self.isHighlighted ? 0.78 : 1
+            }
+        }
+    }
+
+    @objc private func handleTap() { onTap?() }
 }

@@ -80,6 +80,11 @@
 "toggle.front_cam_subtitle" = "前摄独立视频";
 "toggle.mirror_subtitle" = "前摄录制镜像翻转";
 "toggle.autosave_subtitle" = "录制完成后自动保存到相册";
+"section.pip_window" = "PiP 窗口";
+"pip_crop.title" = "自定义范围";
+"pip_crop.subtitle" = "矩形框拖拽选择前摄显示范围";
+"pip_crop.full_frame" = "全画面";
+"pip_crop.custom" = "自定义";
 "pip.front" = "前置";
 "pip.back_wide" = "后广角";
 "iap.description" = "一次性解锁，无限次录制";

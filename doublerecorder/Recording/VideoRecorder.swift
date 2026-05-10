@@ -229,6 +229,18 @@ class VideoRecorder {
         }
     }
 
+    func updatePiPCropRect(_ rect: PiPNormalizedRect) {
+        writeQueue.async { [weak self] in
+            self?.compositor?.updateCropRect(rect)
+        }
+    }
+
+    func updateFrontMirror(_ mirrored: Bool) {
+        writeQueue.async { [weak self] in
+            self?.compositor?.updateMirror(mirrored)
+        }
+    }
+
     /// 用屏幕坐标同步 PiP 位置。VideoRecorder 会根据 back 帧尺寸和 resizeAspectFill 几何关系
     /// 将屏幕坐标映射到视频归一化坐标，避免宽高比差异导致录像 PiP 被截断。
     func updatePiPLayout(screenOriginX: Float, screenOriginY: Float,
@@ -349,6 +361,8 @@ class VideoRecorder {
         let pipH = pipCameraIsBack ? back.height  : front.height
         compositor?.configure(backWidth: bgW, backHeight: bgH, frontWidth: pipW, frontHeight: pipH)
         applyScreenLayout()
+        compositor?.updateCropRect(AppSettings.shared.pipCropRect)
+        compositor?.updateMirror(AppSettings.shared.recordMirrored)
 
         if let w = compositeWriter {
             compositeVideoInput = makeVideoInput(settings: videoSettings(width: bgW, height: bgH))

@@ -4,22 +4,22 @@ import Foundation
 
 class PiPCompositor {
 
-    // 必须与 Metal shader 的 PiPParams 严格对应（24 字节）
+    // 必须与 Metal shader 的 PiPParams 严格对应（40 字节）
     struct PiPParams {
         var pipOriginX: Float
         var pipOriginY: Float
         var pipWidth: Float
         var pipHeight: Float
+        var cropOriginX: Float
+        var cropOriginY: Float
+        var cropWidth: Float
+        var cropHeight: Float
         var cornerRadius: Float
-        var _pad: Float = 0  // Metal float2 对齐补齐到 24 字节
+        var mirrorFront: Float
 
         static func make(backWidth: Int, backHeight: Int,
                          frontWidth: Int, frontHeight: Int,
                          scale: Float = 0.28, margin: Float = 0.03) -> PiPParams {
-            // 在归一化坐标中，PiP 宽度固定为 scale，高度根据前摄真实宽高比计算
-            // 像素尺寸：pipW_px = scale * backWidth, pipH_px = pipH * backHeight
-            // 要使 pipW_px / pipH_px = frontWidth / frontHeight：
-            //   pipH = scale * backWidth * frontHeight / (backHeight * frontWidth)
             let frontAspect = Float(frontWidth) / Float(frontHeight)
             let backAspect  = Float(backWidth)  / Float(backHeight)
             let pipW = scale
@@ -30,7 +30,12 @@ class PiPCompositor {
                 pipOriginY: 1.0 - pipH - margin,
                 pipWidth: pipW,
                 pipHeight: pipH,
-                cornerRadius: 0.015
+                cropOriginX: 0,
+                cropOriginY: 0,
+                cropWidth: 1,
+                cropHeight: 1,
+                cornerRadius: 0.015,
+                mirrorFront: 1
             )
         }
     }
@@ -44,7 +49,11 @@ class PiPCompositor {
     private var outputHeight = 0
 
     var params = PiPParams(pipOriginX: 0.69, pipOriginY: 0.60,
-                           pipWidth: 0.28, pipHeight: 0.37, cornerRadius: 0.015)
+                           pipWidth: 0.28, pipHeight: 0.37,
+                           cropOriginX: 0, cropOriginY: 0,
+                           cropWidth: 1, cropHeight: 1,
+                           cornerRadius: 0.015,
+                           mirrorFront: 1)
 
     init?() {
         guard
@@ -80,6 +89,18 @@ class PiPCompositor {
     func updateOrigin(normalizedX: Float, normalizedY: Float) {
         params.pipOriginX = normalizedX
         params.pipOriginY = normalizedY
+    }
+
+    func updateCropRect(_ rect: PiPNormalizedRect) {
+        let clamped = rect.clamped()
+        params.cropOriginX = Float(clamped.x)
+        params.cropOriginY = Float(clamped.y)
+        params.cropWidth = Float(clamped.width)
+        params.cropHeight = Float(clamped.height)
+    }
+
+    func updateMirror(_ mirrored: Bool) {
+        params.mirrorFront = mirrored ? 1 : 0
     }
 
     // MARK: - 核心合成

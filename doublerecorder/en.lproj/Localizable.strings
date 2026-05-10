@@ -80,6 +80,11 @@
 "toggle.front_cam_subtitle" = "Front camera independent video";
 "toggle.mirror_subtitle" = "Mirror front camera recording";
 "toggle.autosave_subtitle" = "Auto save to Photos after recording";
+"section.pip_window" = "PIP WINDOW";
+"pip_crop.title" = "CUSTOM RANGE";
+"pip_crop.subtitle" = "Drag the rectangle to select front camera display area";
+"pip_crop.full_frame" = "FULL FRAME";
+"pip_crop.custom" = "CUSTOM";
 "pip.front" = "Front";
 "pip.back_wide" = "Rear Wide";
 "iap.description" = "One-time unlock, unlimited recording";

@@ -6,12 +6,14 @@ struct VertexOut {
     float2 texCoord;
 };
 
-// 必须与 Swift 端 PiPParams 严格对应（24 字节）
+// 必须与 Swift 端 PiPParams 严格对应（40 字节）
 struct PiPParams {
     float2 pipOrigin;    // top-left of PiP, normalized (0..1)
     float2 pipSize;      // width/height of PiP, normalized (0..1)
+    float2 cropOrigin;   // selected front-camera area in preview-space UV
+    float2 cropSize;     // selected front-camera area size in preview-space UV
     float  cornerRadius;
-    float  _pad;         // 补齐到 24 字节
+    float  mirrorFront;
 };
 
 static float sdRoundedRect(float2 p, float2 origin, float2 size, float r) {
@@ -59,6 +61,10 @@ fragment float4 pip_fragment(VertexOut in [[stage_in]],
 
     // 将屏幕 UV 映射到前摄纹理坐标
     float2 frontUV = (uv - params.pipOrigin) / params.pipSize;
+    frontUV = params.cropOrigin + frontUV * params.cropSize;
+    if (params.mirrorFront > 0.5) {
+        frontUV.x = 1.0 - frontUV.x;
+    }
 
     if (frontUV.x < 0.0 || frontUV.x > 1.0 || frontUV.y < 0.0 || frontUV.y > 1.0) {
         return backColor;

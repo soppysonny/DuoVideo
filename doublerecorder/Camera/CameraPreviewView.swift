@@ -4,25 +4,46 @@ import AVFoundation
 class CameraPreviewView: UIView {
 
     private(set) var previewLayer: AVCaptureVideoPreviewLayer?
+    var visibleRect: PiPNormalizedRect = .fullFrame {
+        didSet { updatePreviewGeometry() }
+    }
 
     func attachPreviewLayer(_ layer: AVCaptureVideoPreviewLayer) {
         previewLayer?.removeFromSuperlayer()
         previewLayer = layer
+        layer.removeFromSuperlayer()  // detach from any previous superlayer
         layer.videoGravity = .resizeAspectFill
         self.layer.addSublayer(layer)
-        layer.frame = bounds
+        updatePreviewGeometry()
     }
 
-    /// 仅移除当前预览层并清空引用，不做任何 attach 操作。
+    /// 移除当前预览层并返回，不做任何 attach 操作。
     /// 在 swap 时需要先 detach 两端再重新 attach，避免 CALayer 单父层限制导致黑屏。
-    func detach() {
+    @discardableResult
+    func detach() -> AVCaptureVideoPreviewLayer? {
+        let layer = previewLayer
         previewLayer?.removeFromSuperlayer()
         previewLayer = nil
+        return layer
     }
 
-    // 每次 Auto Layout 更新 bounds 时同步子图层尺寸
     override func layoutSubviews() {
         super.layoutSubviews()
-        previewLayer?.frame = bounds
+        updatePreviewGeometry()
+    }
+
+    private func updatePreviewGeometry() {
+        guard let previewLayer else { return }
+        let rect = visibleRect.clamped()
+        guard bounds.width > 0, bounds.height > 0 else {
+            previewLayer.frame = bounds
+            return
+        }
+        previewLayer.frame = CGRect(
+            x: -rect.x * bounds.width / rect.width,
+            y: -rect.y * bounds.height / rect.height,
+            width: bounds.width / rect.width,
+            height: bounds.height / rect.height
+        )
     }
 }
