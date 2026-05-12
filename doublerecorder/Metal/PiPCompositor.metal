@@ -8,15 +8,17 @@ struct VertexOut {
     float2 texCoord;
 };
 
-// 单个 PiP 层参数，与 Swift 端 LayerParams 严格对应（24 字节）
+// 单个 PiP 层参数，与 Swift 端 LayerParams 严格对应（40 字节）
 struct LayerParams {
     float2 origin;        // 归一化左上角 (0..1)
     float2 size;          // 归一化宽高 (0..1)
+    float2 cropOrigin;    // 前摄裁剪区域起点 UV (0..1)
+    float2 cropSize;      // 前摄裁剪区域大小 UV (0..1)
     float  cornerRadius;  // 归一化角半径
-    float  _pad;          // 对齐补齐到 24 字节
+    float  mirrorFront;   // 1.0 = 镜像, 0.0 = 不镜像
 };
 
-// 所有层参数，与 Swift 端 CompositorParams 严格对应（112 字节）
+// 所有层参数，与 Swift 端 CompositorParams 严格对应（176 字节）
 struct CompositorParams {
     LayerParams layers[MAX_PIP_LAYERS];
     int   activeCount;
@@ -79,6 +81,11 @@ fragment float4 pip_fragment(VertexOut in                      [[stage_in]],
         if (sdf > 0.004) { continue; }
 
         float2 pipUV = (uv - layer.origin) / layer.size;
+        // 应用裁剪区域
+        pipUV = layer.cropOrigin + pipUV * layer.cropSize;
+        // 应用镜像
+        if (layer.mirrorFront > 0.5) { pipUV.x = 1.0 - pipUV.x; }
+
         if (pipUV.x < 0.0 || pipUV.x > 1.0 || pipUV.y < 0.0 || pipUV.y > 1.0) { continue; }
 
         float4 pipColor = samplePiP(i, pipUV, pip0, pip1, pip2, pip3, s);

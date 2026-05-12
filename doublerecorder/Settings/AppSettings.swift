@@ -29,6 +29,36 @@ final class AppSettings {
     }
     var atLeastOneSaveEnabled: Bool { saveComposite || saveBack || saveFront }
 
+    // MARK: - PiP crop
+
+    var frontPreviewMirrored: Bool {
+        get { UserDefaults.standard.object(forKey: "frontPreviewMirrored") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "frontPreviewMirrored") }
+    }
+
+    var pipCropRect: PiPNormalizedRect {
+        get {
+            let defaults = UserDefaults.standard
+            guard defaults.object(forKey: "pipCropRect.x") != nil else {
+                return .fullFrame
+            }
+            return PiPNormalizedRect(
+                x: CGFloat(defaults.double(forKey: "pipCropRect.x")),
+                y: CGFloat(defaults.double(forKey: "pipCropRect.y")),
+                width: CGFloat(defaults.double(forKey: "pipCropRect.width")),
+                height: CGFloat(defaults.double(forKey: "pipCropRect.height"))
+            ).clamped()
+        }
+        set {
+            let rect = newValue.clamped()
+            let defaults = UserDefaults.standard
+            defaults.set(rect.x, forKey: "pipCropRect.x")
+            defaults.set(rect.y, forKey: "pipCropRect.y")
+            defaults.set(rect.width, forKey: "pipCropRect.width")
+            defaults.set(rect.height, forKey: "pipCropRect.height")
+        }
+    }
+
     // MARK: - Video resolution
 
     enum VideoResolution: String {
@@ -102,5 +132,6 @@ extension Notification.Name {
     static let captureModeChanged   = Notification.Name("captureModeChanged")
     static let recordMirrorChanged  = Notification.Name("recordMirrorChanged")
     static let pipCameraChanged     = Notification.Name("pipCameraChanged")
+    static let pipCropChanged       = Notification.Name("pipCropChanged")
     static let iapProductLoaded     = Notification.Name("iapProductLoaded")
 }

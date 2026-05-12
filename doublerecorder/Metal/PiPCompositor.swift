@@ -4,17 +4,21 @@ import Foundation
 
 class PiPCompositor {
 
-    // 单个 PiP 层参数，与 Metal 端 LayerParams 严格对应（24 字节）
+    // 单个 PiP 层参数，与 Metal 端 LayerParams 严格对应（40 字节）
     struct LayerParams {
-        var originX: Float
-        var originY: Float
-        var sizeW: Float
-        var sizeH: Float
+        var originX:      Float
+        var originY:      Float
+        var sizeW:        Float
+        var sizeH:        Float
+        var cropOriginX:  Float
+        var cropOriginY:  Float
+        var cropSizeW:    Float
+        var cropSizeH:    Float
         var cornerRadius: Float
-        var _pad: Float = 0
+        var mirrorFront:  Float
     }
 
-    // 所有层参数，与 Metal 端 CompositorParams 严格对应（112 字节）
+    // 所有层参数，与 Metal 端 CompositorParams 严格对应（176 字节）
     struct CompositorParams {
         var layer0: LayerParams
         var layer1: LayerParams
@@ -34,17 +38,28 @@ class PiPCompositor {
     private var outputWidth = 0
     private var outputHeight = 0
 
+    private static let defaultLayer = LayerParams(
+        originX: 0.69, originY: 0.60, sizeW: 0.28, sizeH: 0.37,
+        cropOriginX: 0, cropOriginY: 0, cropSizeW: 1, cropSizeH: 1,
+        cornerRadius: 0.015, mirrorFront: 1
+    )
+    private static let emptyLayer = LayerParams(
+        originX: 0, originY: 0, sizeW: 0, sizeH: 0,
+        cropOriginX: 0, cropOriginY: 0, cropSizeW: 1, cropSizeH: 1,
+        cornerRadius: 0, mirrorFront: 0
+    )
+
     private var compositorParams = CompositorParams(
-        layer0: LayerParams(originX: 0.69, originY: 0.60, sizeW: 0.28, sizeH: 0.37, cornerRadius: 0.015),
-        layer1: LayerParams(originX: 0, originY: 0, sizeW: 0, sizeH: 0, cornerRadius: 0),
-        layer2: LayerParams(originX: 0, originY: 0, sizeW: 0, sizeH: 0, cornerRadius: 0),
-        layer3: LayerParams(originX: 0, originY: 0, sizeW: 0, sizeH: 0, cornerRadius: 0),
+        layer0: defaultLayer, layer1: emptyLayer,
+        layer2: emptyLayer,   layer3: emptyLayer,
         activeCount: 1
     )
 
     init?() {
-        assert(MemoryLayout<LayerParams>.size == 24, "LayerParams must be 24 bytes, got \(MemoryLayout<LayerParams>.size)")
-        assert(MemoryLayout<CompositorParams>.size == 112, "CompositorParams must be 112 bytes, got \(MemoryLayout<CompositorParams>.size)")
+        assert(MemoryLayout<LayerParams>.size == 40,
+               "LayerParams must be 40 bytes, got \(MemoryLayout<LayerParams>.size)")
+        assert(MemoryLayout<CompositorParams>.size == 176,
+               "CompositorParams must be 176 bytes, got \(MemoryLayout<CompositorParams>.size)")
 
         guard
             let device = MTLCreateSystemDefaultDevice(),
@@ -71,11 +86,10 @@ class PiPCompositor {
         let margin: Float = 0.03
 
         compositorParams.layer0 = LayerParams(
-            originX: 1.0 - pipW - margin,
-            originY: 1.0 - pipH - margin,
-            sizeW: pipW,
-            sizeH: pipH,
-            cornerRadius: 0.015
+            originX: 1.0 - pipW - margin, originY: 1.0 - pipH - margin,
+            sizeW: pipW, sizeH: pipH,
+            cropOriginX: 0, cropOriginY: 0, cropSizeW: 1, cropSizeH: 1,
+            cornerRadius: 0.015, mirrorFront: 1
         )
         compositorParams.activeCount = 1
     }
@@ -94,9 +108,20 @@ class PiPCompositor {
         compositorParams.activeCount = Int32(min(max(count, 0), 4))
     }
 
+    func updateCropRect(_ rect: PiPNormalizedRect) {
+        let clamped = rect.clamped()
+        compositorParams.layer0.cropOriginX = Float(clamped.x)
+        compositorParams.layer0.cropOriginY = Float(clamped.y)
+        compositorParams.layer0.cropSizeW   = Float(clamped.width)
+        compositorParams.layer0.cropSizeH   = Float(clamped.height)
+    }
+
+    func updateMirror(_ mirrored: Bool) {
+        compositorParams.layer0.mirrorFront = mirrored ? 1 : 0
+    }
+
     // MARK: - 核心合成
 
-    // overlays: [(buffer, layerIndex)] 对应 compositorParams.layers[layerIndex]
     func composite(backBuffer: CVPixelBuffer,
                    overlays: [(buffer: CVPixelBuffer, index: Int)]) -> CVPixelBuffer? {
         let w = CVPixelBufferGetWidth(backBuffer)
@@ -125,9 +150,8 @@ class PiPCompositor {
         encoder.setRenderPipelineState(pipelineState)
         encoder.setFragmentTexture(backTex, index: 0)
 
-        // 绑定各层纹理到 texture(1)~texture(4)
         for overlay in overlays {
-            let texIndex = overlay.index + 1  // index 0 → texture(1), etc.
+            let texIndex = overlay.index + 1
             guard texIndex >= 1, texIndex <= 4,
                   let tex = texture(from: overlay.buffer) else { continue }
             encoder.setFragmentTexture(tex, index: texIndex)

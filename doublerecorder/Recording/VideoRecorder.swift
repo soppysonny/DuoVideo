@@ -241,6 +241,18 @@ class VideoRecorder {
         }
     }
 
+    func updatePiPCropRect(_ rect: PiPNormalizedRect) {
+        writeQueue.async { [weak self] in
+            self?.compositor?.updateCropRect(rect)
+        }
+    }
+
+    func updateFrontMirror(_ mirrored: Bool) {
+        writeQueue.async { [weak self] in
+            self?.compositor?.updateMirror(mirrored)
+        }
+    }
+
     /// 用屏幕坐标同步 PiP 位置（向后兼容，单层场景）。
     func updatePiPLayout(screenOriginX: Float, screenOriginY: Float,
                          screenPipW: Float, screenPipH: Float,
@@ -306,11 +318,15 @@ class VideoRecorder {
                 normW = pw / (scale * bW)
                 let fW = rawFW.map { Float($0) } ?? bW
                 let fH = rawFH.map { Float($0) } ?? bH
-                normH = normW * bH * fW / (bW * fH)
+                // 高度按前后摄宽高比及裁剪比推算，保证前摄内容无失真
+                let cropRect = AppSettings.shared.pipCropRect
+                let cropW = Float(cropRect.width), cropH = Float(cropRect.height)
+                normH = normW * bH * fW * cropH / (bW * fH * cropW)
             } else {
-                // 帧尺寸未知时回退：屏幕归一化
+                // 帧尺寸未知时回退：屏幕归一化，以裁剪宽高比修正高度
                 normW = pw / sW
-                normH = normW
+                let crop = AppSettings.shared.pipCropRect
+                normH = normW * Float(crop.height) / Float(crop.width)
                 normOriginX = ox / sW
                 normOriginY = oy / sH
             }
@@ -321,7 +337,8 @@ class VideoRecorder {
             comp.updateLayer(at: i, params: PiPCompositor.LayerParams(
                 originX: clampedX, originY: clampedY,
                 sizeW: normW, sizeH: normH,
-                cornerRadius: layout.cornerRadius
+                cropOriginX: 0, cropOriginY: 0, cropSizeW: 1, cropSizeH: 1,
+                cornerRadius: layout.cornerRadius, mirrorFront: 1
             ))
         }
         comp.setActiveLayerCount(min(storedPiPLayouts.count, 4))
@@ -373,6 +390,8 @@ class VideoRecorder {
         let pipH = pipCameraIsBack ? back.height  : front.height
         compositor?.configure(backWidth: bgW, backHeight: bgH, frontWidth: pipW, frontHeight: pipH)
         applyLayerLayout()
+        compositor?.updateCropRect(AppSettings.shared.pipCropRect)
+        compositor?.updateMirror(AppSettings.shared.recordMirrored)
 
         if let w = compositeWriter {
             compositeVideoInput = makeVideoInput(settings: videoSettings(width: bgW, height: bgH))
