@@ -19,14 +19,18 @@ class ViewController: UIViewController {
     // PiP 窗口层对象（统一管理位置、大小、形状）
     private let frontLayer = VideoLayer(source: .front, zOrder: 1)
     // pipCorner 保留用于水印位置和吸附逻辑（从 frontLayer.screenOrigin 推断）
-    private var pipCorner: PiPCorner = .bottomLeft
+    private var pipCorner: PiPCorner = .bottomRight
     private var lockedOrientation: AVCaptureVideoOrientation?
     private var recordingSeconds = 0
     private var audioLevelValue: Float = 0
     private var pipIsDragging   = false
     private var pipFreeOrigin: CGPoint? = nil  // 用户拖动后的自由坐标，nil 时使用默认角落
 
-    enum PiPCorner { case topLeft, topRight, bottomLeft, bottomRight }
+    // PiP 风格状态
+    private var pipSizeRatio: CGFloat = 0.30
+    private var pipIsCircle:  Bool    = false
+    private var currentStyleID        = "standard"
+    private var isStylePanelExpanded  = true
 
     // MARK: - Business objects
 
@@ -80,6 +84,10 @@ class ViewController: UIViewController {
     private let aeLockBtn    = ToolbarButton(icon: "lock.fill",        iconOff: "lock.open.fill",  title: "AE/AF")
     private let settingsBtn  = ToolbarButton(icon: "gearshape.fill",   iconOff: nil,               title: "SET")
     private let modeBtn      = ToolbarButton(icon: "camera.aperture",  iconOff: "video.fill",      title: "MODE")
+
+    // MARK: - PiP Style Panel
+
+    private var pipStylePanelView: PiPStylePanelView!
 
     // MARK: - Bottom dock
 
@@ -231,6 +239,7 @@ class ViewController: UIViewController {
         crosshairView.isUserInteractionEnabled = false
         view.addSubview(crosshairView)
 
+        setupStylePanel()
         setupPiP()
         setupTopHUD()
         setupIslandPill()
@@ -246,6 +255,16 @@ class ViewController: UIViewController {
 
         // position on first pass
         applyLayout(for: view.bounds.size)
+    }
+
+    // MARK: - Style Panel Setup
+
+    private func setupStylePanel() {
+        pipStylePanelView = PiPStylePanelView()
+        pipStylePanelView.delegate    = self
+        pipStylePanelView.selectedID  = currentStyleID
+        pipStylePanelView.clipsToBounds = true
+        view.addSubview(pipStylePanelView)
     }
 
     // MARK: - PiP Setup
@@ -574,10 +593,27 @@ class ViewController: UIViewController {
         layoutIslandPill(size: size, isLandscape: isLandscape)
         layoutSideToolbar(size: size, isLandscape: isLandscape, safe: safe)
         layoutBottomDock(size: size, isLandscape: isLandscape, safe: safe, shorter: shorter)
+        layoutStylePanel(size: size, isLandscape: isLandscape, safe: safe)
         layoutPiP(size: size, isLandscape: isLandscape, safe: safe, shorter: shorter)
         layoutAudioMeter(size: size, isLandscape: isLandscape, safe: safe)
         layoutCrosshair(size: size)
         applyOverlapFade(animated: false)
+    }
+
+    private func layoutStylePanel(size: CGSize, isLandscape: Bool, safe: UIEdgeInsets) {
+        guard !isLandscape else {
+            pipStylePanelView.isHidden = true
+            return
+        }
+        pipStylePanelView.isHidden = recordButton.isRecording
+
+        let panelH = isStylePanelExpanded ? PiPStylePanelView.expandedH : PiPStylePanelView.collapsedH
+        let dockY  = size.height - safe.bottom - 138
+        let panelY = dockY - 8 - panelH
+        let hPad: CGFloat = 12
+        pipStylePanelView.frame = CGRect(x: hPad, y: panelY,
+                                          width: size.width - hPad * 2, height: panelH)
+        pipStylePanelView.setExpanded(isStylePanelExpanded, animated: false)
     }
 
     private func layoutTopHUD(size: CGSize, isLandscape: Bool, safe: UIEdgeInsets) {
@@ -750,18 +786,26 @@ class ViewController: UIViewController {
         let pipW: CGFloat
         let pipH: CGFloat
         if isLandscape {
-            pipH = shorter * 0.30
-            pipW = pipH / portraitAspect
+            pipH = shorter * pipSizeRatio
+            pipW = pipIsCircle ? pipH : pipH / portraitAspect
         } else {
-            pipW = shorter * 0.30
-            pipH = pipW / portraitAspect
+            pipW = shorter * pipSizeRatio
+            pipH = pipIsCircle ? pipW : pipW / portraitAspect
         }
         pipContainerView.bounds = CGRect(x: 0, y: 0, width: pipW, height: pipH)
         frontPreviewView.frame = pipContainerView.bounds
 
+        // UIKit corner radius: circle = half of min(w,h), roundedRect = fixed 16pt
+        let uiCornerR: CGFloat = pipIsCircle ? min(pipW, pipH) / 2 : 16
+        pipContainerView.layer.cornerRadius = uiCornerR
+
+        // Portrait bottom margin accounts for style panel height
+        let panelH = isStylePanelExpanded ? PiPStylePanelView.expandedH : PiPStylePanelView.collapsedH
+        let pipBottomMargin: CGFloat = isLandscape ? safe.bottom + 80 : safe.bottom + 138 + panelH + 16
+
         let margins = isLandscape
-            ? PiPMargins(top: safe.top + 14, bottom: safe.bottom + 80, left: safe.left + 60, right: safe.right + 130)
-            : PiPMargins(top: safe.top + 8, bottom: safe.bottom + 150, left: 8, right: 8)
+            ? PiPMargins(top: safe.top + 14, bottom: pipBottomMargin, left: safe.left + 60, right: safe.right + 130)
+            : PiPMargins(top: safe.top + 8,  bottom: pipBottomMargin, left: 8, right: 8)
 
         if let freeOrigin = pipFreeOrigin {
             // 保持用户拖动后的自由坐标，旋转时做边界裁剪避免越界
@@ -796,7 +840,7 @@ class ViewController: UIViewController {
             $0.frame = CGRect(x: 0, y: 0, width: pipW, height: 26)
         }
         pipRecBorderLayer.frame = CGRect(x: 0, y: 0, width: pipW, height: pipH)
-        pipRecBorderLayer.cornerRadius = 16
+        pipRecBorderLayer.cornerRadius = uiCornerR
     }
 
     private func layoutAudioMeter(size: CGSize, isLandscape: Bool, safe: UIEdgeInsets) {
@@ -851,9 +895,11 @@ class ViewController: UIViewController {
         let ps  = pipSize ?? pipContainerView.bounds.size
         let isL = s.width > s.height
         let safe = view.safeAreaInsets
+        let panelH = isStylePanelExpanded ? PiPStylePanelView.expandedH : PiPStylePanelView.collapsedH
+        let defaultBottom = isL ? safe.bottom + 80 : safe.bottom + 138 + panelH + 16
         let m = margins ?? (isL
-            ? PiPMargins(top: safe.top + 14, bottom: safe.bottom + 80, left: safe.left + 60, right: safe.right + 130)
-            : PiPMargins(top: safe.top + 8, bottom: safe.bottom + 196, left: 8, right: 8))
+            ? PiPMargins(top: safe.top + 14, bottom: defaultBottom, left: safe.left + 60, right: safe.right + 130)
+            : PiPMargins(top: safe.top + 8, bottom: defaultBottom, left: 8, right: 8))
 
         let origin = pipPosition(for: corner, size: s, pipSize: ps, margins: m)
 
@@ -873,6 +919,54 @@ class ViewController: UIViewController {
             pipContainerView.frame.origin = origin
             updateWatermarkPosition()
         }
+    }
+
+    // MARK: - PiP Style
+
+    private func applyPiPStyle(_ style: PiPStylePreset) {
+        currentStyleID   = style.id
+        pipSizeRatio     = style.sizeRatio
+        pipIsCircle      = style.isCircle
+        frontLayer.shape = style.shape
+        pipStylePanelView.selectedID = style.id
+        pipFreeOrigin = nil  // reset free drag; use preset corner
+        pipCorner     = style.corner
+
+        let size = view.bounds.size
+        let safe = view.safeAreaInsets
+        let shorter = min(size.width, size.height)
+        let isLandscape = size.width > size.height
+
+        // Compute pip size for this style
+        let rawAspect = videoRecorder.pipFrameAspect ?? (9.0 / 16.0)
+        let crop = AppSettings.shared.pipCropRect
+        let effectiveAspect = rawAspect * crop.width / crop.height
+        let portraitAspect = min(effectiveAspect, 1.0 / effectiveAspect)
+        let pipW: CGFloat
+        let pipH: CGFloat
+        if isLandscape {
+            pipH = shorter * pipSizeRatio
+            pipW = pipIsCircle ? pipH : pipH / portraitAspect
+        } else {
+            pipW = shorter * pipSizeRatio
+            pipH = pipIsCircle ? pipW : pipW / portraitAspect
+        }
+        pipContainerView.bounds = CGRect(x: 0, y: 0, width: pipW, height: pipH)
+        frontPreviewView.frame = pipContainerView.bounds
+
+        let uiCornerR: CGFloat = pipIsCircle ? min(pipW, pipH) / 2 : 16
+        pipContainerView.layer.cornerRadius = uiCornerR
+        pipRecBorderLayer.cornerRadius = uiCornerR
+
+        let panelH = isStylePanelExpanded ? PiPStylePanelView.expandedH : PiPStylePanelView.collapsedH
+        let pipBottomMargin: CGFloat = isLandscape ? safe.bottom + 80 : safe.bottom + 138 + panelH + 16
+        let margins = isLandscape
+            ? PiPMargins(top: safe.top + 14, bottom: pipBottomMargin, left: safe.left + 60, right: safe.right + 130)
+            : PiPMargins(top: safe.top + 8,  bottom: pipBottomMargin, left: 8, right: 8)
+
+        snapPiP(to: style.corner, size: size, pipSize: CGSize(width: pipW, height: pipH),
+                margins: margins, animated: true)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     // PiP 停止后检测重叠 view 并设为半透明
@@ -1270,17 +1364,20 @@ class ViewController: UIViewController {
 
         UIView.animate(withDuration: 0.22, animations: {
             let alpha: CGFloat = rec ? 0 : 1
-            self.sideToolbarBlur.alpha = alpha
-            self.galleryThumb.alpha    = alpha
-            self.swapBtn.alpha         = alpha
+            self.sideToolbarBlur.alpha   = alpha
+            self.galleryThumb.alpha      = alpha
+            self.swapBtn.alpha           = alpha
+            self.pipStylePanelView.alpha = alpha
             if let lbl = self.view.viewWithTag(701) { lbl.alpha = alpha }
             if let lbl = self.view.viewWithTag(702) { lbl.alpha = alpha }
         }, completion: { _ in
+            self.pipStylePanelView.isHidden = rec
             if !rec { self.applyOverlapFade() }
         })
-        sideToolbarBlur.isUserInteractionEnabled = !rec
-        galleryThumb.isUserInteractionEnabled    = !rec
-        swapBtn.isUserInteractionEnabled         = !rec
+        sideToolbarBlur.isUserInteractionEnabled      = !rec
+        galleryThumb.isUserInteractionEnabled         = !rec
+        swapBtn.isUserInteractionEnabled              = !rec
+        pipStylePanelView.isUserInteractionEnabled    = !rec
     }
 
     private func animateIslandIn() {
@@ -1651,6 +1748,36 @@ class ViewController: UIViewController {
             } completion: { _ in
                 container.removeFromSuperview()
             }
+        }
+    }
+}
+
+// MARK: - PiPStylePanelDelegate
+
+extension ViewController: PiPStylePanelDelegate {
+
+    func stylePanel(_ panel: PiPStylePanelView, didSelect preset: PiPStylePreset) {
+        applyPiPStyle(preset)
+    }
+
+    func stylePanelDidToggleCollapse(_ panel: PiPStylePanelView) {
+        isStylePanelExpanded.toggle()
+        let size = view.bounds.size
+        let safe = view.safeAreaInsets
+        let panelH = isStylePanelExpanded ? PiPStylePanelView.expandedH : PiPStylePanelView.collapsedH
+        let dockY  = size.height - safe.bottom - 138
+        let panelY = dockY - 8 - panelH
+
+        panel.setExpanded(isStylePanelExpanded, animated: true)
+        UIView.animate(withDuration: 0.3, delay: 0,
+                       usingSpringWithDamping: 0.8, initialSpringVelocity: 0.3) {
+            panel.frame = CGRect(x: panel.frame.minX, y: panelY,
+                                 width: panel.frame.width, height: panelH)
+        }
+        // Re-snap PiP with updated bottom margin after panel resize
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            guard let self, self.pipFreeOrigin == nil else { return }
+            self.snapPiP(to: self.pipCorner, animated: false)
         }
     }
 }

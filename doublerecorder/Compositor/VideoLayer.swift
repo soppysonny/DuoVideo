@@ -37,12 +37,17 @@ final class VideoLayer {
         self.isBackground = isBackground
     }
 
+    var isCircle: Bool {
+        if case .circle = shape { return true }
+        return false
+    }
+
+    // For roundedRect: returns the normalized corner radius.
+    // For circle: returns 0 — VideoRecorder computes min(normW,normH)/2 in normalized video space.
     var normalizedCornerRadius: Float {
         switch shape {
-        case .roundedRect(let r):
-            return r
-        case .circle:
-            return Float(min(screenSize.width, screenSize.height)) / 2
+        case .roundedRect(let r): return r
+        case .circle:             return 0
         }
     }
 }

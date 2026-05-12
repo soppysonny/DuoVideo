@@ -32,6 +32,7 @@ class VideoRecorder {
         let origin:       CGPoint
         let size:         CGSize
         let cornerRadius: Float
+        let isCircle:     Bool
     }
     private var storedPiPLayouts: [StoredPiPLayout] = []
     private var storedScreenBounds: CGSize = .zero
@@ -230,8 +231,10 @@ class VideoRecorder {
     func syncLayers(_ layers: [VideoLayer], screenBounds: CGSize) {
         let layouts = layers.filter { !$0.isBackground }
             .sorted { $0.zOrder < $1.zOrder }
-            .map { StoredPiPLayout(origin: $0.screenOrigin, size: $0.screenSize,
-                                   cornerRadius: $0.normalizedCornerRadius) }
+            .map { layer -> StoredPiPLayout in
+                StoredPiPLayout(origin: layer.screenOrigin, size: layer.screenSize,
+                                cornerRadius: layer.normalizedCornerRadius, isCircle: layer.isCircle)
+            }
         let bounds = screenBounds
         writeQueue.async { [weak self] in
             guard let self else { return }
@@ -260,7 +263,8 @@ class VideoRecorder {
         let layout = StoredPiPLayout(
             origin: CGPoint(x: CGFloat(screenOriginX), y: CGFloat(screenOriginY)),
             size: CGSize(width: CGFloat(screenPipW), height: CGFloat(screenPipH)),
-            cornerRadius: 0.015
+            cornerRadius: 0.015,
+            isCircle: false
         )
         let bounds = CGSize(width: CGFloat(screenW), height: CGFloat(screenH))
         writeQueue.async { [weak self] in
@@ -334,11 +338,12 @@ class VideoRecorder {
             let clampedX = min(max(normOriginX, 0), max(1.0 - normW, 0))
             let clampedY = min(max(normOriginY, 0), max(1.0 - normH, 0))
 
+            let cornerR: Float = layout.isCircle ? min(normW, normH) / 2 : layout.cornerRadius
             comp.updateLayer(at: i, params: PiPCompositor.LayerParams(
                 originX: clampedX, originY: clampedY,
                 sizeW: normW, sizeH: normH,
                 cropOriginX: 0, cropOriginY: 0, cropSizeW: 1, cropSizeH: 1,
-                cornerRadius: layout.cornerRadius, mirrorFront: 1
+                cornerRadius: cornerR, mirrorFront: 1
             ))
         }
         comp.setActiveLayerCount(min(storedPiPLayouts.count, 4))
