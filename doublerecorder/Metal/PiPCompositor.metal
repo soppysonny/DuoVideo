@@ -1,17 +1,28 @@
 #include <metal_stdlib>
 using namespace metal;
 
+#define MAX_PIP_LAYERS 4
+
 struct VertexOut {
     float4 position [[position]];
     float2 texCoord;
 };
 
-// 必须与 Swift 端 PiPParams 严格对应（24 字节）
-struct PiPParams {
-    float2 pipOrigin;    // top-left of PiP, normalized (0..1)
-    float2 pipSize;      // width/height of PiP, normalized (0..1)
-    float  cornerRadius;
-    float  _pad;         // 补齐到 24 字节
+// 单个 PiP 层参数，与 Swift 端 LayerParams 严格对应（24 字节）
+struct LayerParams {
+    float2 origin;        // 归一化左上角 (0..1)
+    float2 size;          // 归一化宽高 (0..1)
+    float  cornerRadius;  // 归一化角半径
+    float  _pad;          // 对齐补齐到 24 字节
+};
+
+// 所有层参数，与 Swift 端 CompositorParams 严格对应（112 字节）
+struct CompositorParams {
+    LayerParams layers[MAX_PIP_LAYERS];
+    int   activeCount;
+    float _pad0;
+    float _pad1;
+    float _pad2;
 };
 
 static float sdRoundedRect(float2 p, float2 origin, float2 size, float r) {
@@ -20,7 +31,16 @@ static float sdRoundedRect(float2 p, float2 origin, float2 size, float r) {
     return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
 }
 
-// 顶点着色器只负责输出覆盖全屏的四边形，不涉及 PiP 参数
+static float4 samplePiP(int idx, float2 uv,
+                         texture2d<float> p0, texture2d<float> p1,
+                         texture2d<float> p2, texture2d<float> p3,
+                         sampler s) {
+    if (idx == 0) return p0.sample(s, uv);
+    if (idx == 1) return p1.sample(s, uv);
+    if (idx == 2) return p2.sample(s, uv);
+    return p3.sample(s, uv);
+}
+
 vertex VertexOut pip_vertex(uint vertexID [[vertex_id]]) {
     float2 positions[4] = {
         {-1.0,  1.0},
@@ -40,33 +60,31 @@ vertex VertexOut pip_vertex(uint vertexID [[vertex_id]]) {
     return out;
 }
 
-// PiP 判断必须在片元着色器里做（顶点插值无法正确传递区域内外信息）
-fragment float4 pip_fragment(VertexOut in [[stage_in]],
-                             texture2d<float> backTexture  [[texture(0)]],
-                             texture2d<float> frontTexture [[texture(1)]],
-                             constant PiPParams &params    [[buffer(0)]]) {
+fragment float4 pip_fragment(VertexOut in                      [[stage_in]],
+                             texture2d<float> backTexture      [[texture(0)]],
+                             texture2d<float> pip0             [[texture(1)]],
+                             texture2d<float> pip1             [[texture(2)]],
+                             texture2d<float> pip2             [[texture(3)]],
+                             texture2d<float> pip3             [[texture(4)]],
+                             constant CompositorParams& params [[buffer(0)]]) {
     constexpr sampler s(filter::linear, address::clamp_to_edge);
 
     float2 uv = in.texCoord;
-    float4 backColor = backTexture.sample(s, uv);
+    float4 color = backTexture.sample(s, uv);
 
-    float sdf = sdRoundedRect(uv, params.pipOrigin, params.pipSize, params.cornerRadius);
+    for (int i = 0; i < params.activeCount; i++) {
+        LayerParams layer = params.layers[i];
+        float sdf = sdRoundedRect(uv, layer.origin, layer.size, layer.cornerRadius);
 
-    // 明显在 PiP 区域外，直接返回后摄
-    if (sdf > 0.004) {
-        return backColor;
+        if (sdf > 0.004) { continue; }
+
+        float2 pipUV = (uv - layer.origin) / layer.size;
+        if (pipUV.x < 0.0 || pipUV.x > 1.0 || pipUV.y < 0.0 || pipUV.y > 1.0) { continue; }
+
+        float4 pipColor = samplePiP(i, pipUV, pip0, pip1, pip2, pip3, s);
+        float alpha = 1.0 - smoothstep(-0.002, 0.0, sdf);
+        color = mix(color, pipColor, alpha);
     }
 
-    // 将屏幕 UV 映射到前摄纹理坐标
-    float2 frontUV = (uv - params.pipOrigin) / params.pipSize;
-
-    if (frontUV.x < 0.0 || frontUV.x > 1.0 || frontUV.y < 0.0 || frontUV.y > 1.0) {
-        return backColor;
-    }
-
-    float4 frontColor = frontTexture.sample(s, frontUV);
-
-    // SDF 软边抗锯齿
-    float alpha = 1.0 - smoothstep(-0.002, 0.0, sdf);
-    return mix(backColor, frontColor, alpha);
+    return color;
 }

@@ -4,35 +4,26 @@ import Foundation
 
 class PiPCompositor {
 
-    // 必须与 Metal shader 的 PiPParams 严格对应（24 字节）
-    struct PiPParams {
-        var pipOriginX: Float
-        var pipOriginY: Float
-        var pipWidth: Float
-        var pipHeight: Float
+    // 单个 PiP 层参数，与 Metal 端 LayerParams 严格对应（24 字节）
+    struct LayerParams {
+        var originX: Float
+        var originY: Float
+        var sizeW: Float
+        var sizeH: Float
         var cornerRadius: Float
-        var _pad: Float = 0  // Metal float2 对齐补齐到 24 字节
+        var _pad: Float = 0
+    }
 
-        static func make(backWidth: Int, backHeight: Int,
-                         frontWidth: Int, frontHeight: Int,
-                         scale: Float = 0.28, margin: Float = 0.03) -> PiPParams {
-            // 在归一化坐标中，PiP 宽度固定为 scale，高度根据前摄真实宽高比计算
-            // 像素尺寸：pipW_px = scale * backWidth, pipH_px = pipH * backHeight
-            // 要使 pipW_px / pipH_px = frontWidth / frontHeight：
-            //   pipH = scale * backWidth * frontHeight / (backHeight * frontWidth)
-            let frontAspect = Float(frontWidth) / Float(frontHeight)
-            let backAspect  = Float(backWidth)  / Float(backHeight)
-            let pipW = scale
-            let pipH = pipW * backAspect / frontAspect
-
-            return PiPParams(
-                pipOriginX: 1.0 - pipW - margin,
-                pipOriginY: 1.0 - pipH - margin,
-                pipWidth: pipW,
-                pipHeight: pipH,
-                cornerRadius: 0.015
-            )
-        }
+    // 所有层参数，与 Metal 端 CompositorParams 严格对应（112 字节）
+    struct CompositorParams {
+        var layer0: LayerParams
+        var layer1: LayerParams
+        var layer2: LayerParams
+        var layer3: LayerParams
+        var activeCount: Int32
+        var _pad0: Float = 0
+        var _pad1: Float = 0
+        var _pad2: Float = 0
     }
 
     private let device: MTLDevice
@@ -43,10 +34,18 @@ class PiPCompositor {
     private var outputWidth = 0
     private var outputHeight = 0
 
-    var params = PiPParams(pipOriginX: 0.69, pipOriginY: 0.60,
-                           pipWidth: 0.28, pipHeight: 0.37, cornerRadius: 0.015)
+    private var compositorParams = CompositorParams(
+        layer0: LayerParams(originX: 0.69, originY: 0.60, sizeW: 0.28, sizeH: 0.37, cornerRadius: 0.015),
+        layer1: LayerParams(originX: 0, originY: 0, sizeW: 0, sizeH: 0, cornerRadius: 0),
+        layer2: LayerParams(originX: 0, originY: 0, sizeW: 0, sizeH: 0, cornerRadius: 0),
+        layer3: LayerParams(originX: 0, originY: 0, sizeW: 0, sizeH: 0, cornerRadius: 0),
+        activeCount: 1
+    )
 
     init?() {
+        assert(MemoryLayout<LayerParams>.size == 24, "LayerParams must be 24 bytes, got \(MemoryLayout<LayerParams>.size)")
+        assert(MemoryLayout<CompositorParams>.size == 112, "CompositorParams must be 112 bytes, got \(MemoryLayout<CompositorParams>.size)")
+
         guard
             let device = MTLCreateSystemDefaultDevice(),
             let queue = device.makeCommandQueue()
@@ -64,28 +63,42 @@ class PiPCompositor {
         }
     }
 
-    // 在 VideoRecorder 拿到前后摄真实尺寸后调用，校正 PiP 宽高比
     func configure(backWidth: Int, backHeight: Int, frontWidth: Int, frontHeight: Int) {
-        params = PiPParams.make(backWidth: backWidth, backHeight: backHeight,
-                               frontWidth: frontWidth, frontHeight: frontHeight)
+        let frontAspect = Float(frontWidth) / Float(frontHeight)
+        let backAspect  = Float(backWidth)  / Float(backHeight)
+        let pipW: Float = 0.28
+        let pipH = pipW * backAspect / frontAspect
+        let margin: Float = 0.03
+
+        compositorParams.layer0 = LayerParams(
+            originX: 1.0 - pipW - margin,
+            originY: 1.0 - pipH - margin,
+            sizeW: pipW,
+            sizeH: pipH,
+            cornerRadius: 0.015
+        )
+        compositorParams.activeCount = 1
     }
 
-    // 用户拖动 PiP 改变角落时同步更新合成视频里的叠层位置
-    func updateCorner(isLeft: Bool, isTop: Bool, margin: Float = 0.03) {
-        params.pipOriginX = isLeft ? margin : 1.0 - params.pipWidth  - margin
-        params.pipOriginY = isTop  ? margin : 1.0 - params.pipHeight - margin
+    func updateLayer(at index: Int, params: LayerParams) {
+        switch index {
+        case 0: compositorParams.layer0 = params
+        case 1: compositorParams.layer1 = params
+        case 2: compositorParams.layer2 = params
+        case 3: compositorParams.layer3 = params
+        default: break
+        }
     }
 
-    // 按精确归一化坐标更新叠层位置（自由拖动后使用）
-    func updateOrigin(normalizedX: Float, normalizedY: Float) {
-        params.pipOriginX = normalizedX
-        params.pipOriginY = normalizedY
+    func setActiveLayerCount(_ count: Int) {
+        compositorParams.activeCount = Int32(min(max(count, 0), 4))
     }
 
     // MARK: - 核心合成
 
+    // overlays: [(buffer, layerIndex)] 对应 compositorParams.layers[layerIndex]
     func composite(backBuffer: CVPixelBuffer,
-                   frontBuffer: CVPixelBuffer) -> CVPixelBuffer? {
+                   overlays: [(buffer: CVPixelBuffer, index: Int)]) -> CVPixelBuffer? {
         let w = CVPixelBufferGetWidth(backBuffer)
         let h = CVPixelBufferGetHeight(backBuffer)
 
@@ -93,9 +106,8 @@ class PiPCompositor {
 
         guard
             let outputBuffer = allocateOutputBuffer(),
-            let backTex   = texture(from: backBuffer),
-            let frontTex  = texture(from: frontBuffer),
-            let outputTex = texture(from: outputBuffer)
+            let backTex      = texture(from: backBuffer),
+            let outputTex    = texture(from: outputBuffer)
         else { return nil }
 
         let descriptor = MTLRenderPassDescriptor()
@@ -109,12 +121,19 @@ class PiPCompositor {
             let encoder = commandBuffer.makeRenderCommandEncoder(descriptor: descriptor)
         else { return nil }
 
-        var metalParams = params
+        var metalParams = compositorParams
         encoder.setRenderPipelineState(pipelineState)
-        // 顶点着色器不再使用 params，仅片元着色器需要
-        encoder.setFragmentTexture(backTex,  index: 0)
-        encoder.setFragmentTexture(frontTex, index: 1)
-        encoder.setFragmentBytes(&metalParams, length: MemoryLayout<PiPParams>.size, index: 0)
+        encoder.setFragmentTexture(backTex, index: 0)
+
+        // 绑定各层纹理到 texture(1)~texture(4)
+        for overlay in overlays {
+            let texIndex = overlay.index + 1  // index 0 → texture(1), etc.
+            guard texIndex >= 1, texIndex <= 4,
+                  let tex = texture(from: overlay.buffer) else { continue }
+            encoder.setFragmentTexture(tex, index: texIndex)
+        }
+
+        encoder.setFragmentBytes(&metalParams, length: MemoryLayout<CompositorParams>.size, index: 0)
         encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
         encoder.endEncoding()
 

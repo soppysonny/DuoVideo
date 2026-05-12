@@ -26,13 +26,15 @@ class VideoRecorder {
     var isMicMuted = false
 
     private let compositor = PiPCompositor()
-    // Screen-space PiP layout info (set by ViewController, mapped to video coords when frame size is known)
-    private var storedScreenOriginX: Float?
-    private var storedScreenOriginY: Float?
-    private var storedScreenPipW: Float?
-    private var storedScreenPipH: Float?
-    private var storedScreenW: Float?
-    private var storedScreenH: Float?
+
+    // 屏幕空间 PiP 布局（各层的坐标由 syncLayers / updatePiPLayout 写入）
+    private struct StoredPiPLayout {
+        let origin:       CGPoint
+        let size:         CGSize
+        let cornerRadius: Float
+    }
+    private var storedPiPLayouts: [StoredPiPLayout] = []
+    private var storedScreenBounds: CGSize = .zero
 
     private(set) var latestBackPixelBuffer:  CVPixelBuffer?
     private(set) var latestFrontPixelBuffer: CVPixelBuffer?
@@ -221,86 +223,108 @@ class VideoRecorder {
         }
     }
 
-    // MARK: - PiP 角落同步（合成视频跟随预览位置）
+    // MARK: - PiP 布局同步
 
-    func updatePiPCorner(isLeft: Bool, isTop: Bool) {
+    /// 用 VideoLayer 数组同步 PiP 布局（主接口）。
+    /// 非背景层按 zOrder 升序传入，对应 compositor 的 layer 0..N。
+    func syncLayers(_ layers: [VideoLayer], screenBounds: CGSize) {
+        let layouts = layers.filter { !$0.isBackground }
+            .sorted { $0.zOrder < $1.zOrder }
+            .map { StoredPiPLayout(origin: $0.screenOrigin, size: $0.screenSize,
+                                   cornerRadius: $0.normalizedCornerRadius) }
+        let bounds = screenBounds
         writeQueue.async { [weak self] in
-            self?.compositor?.updateCorner(isLeft: isLeft, isTop: isTop)
+            guard let self else { return }
+            self.storedPiPLayouts = layouts
+            self.storedScreenBounds = bounds
+            self.applyLayerLayout()
         }
     }
 
-    /// 用屏幕坐标同步 PiP 位置。VideoRecorder 会根据 back 帧尺寸和 resizeAspectFill 几何关系
-    /// 将屏幕坐标映射到视频归一化坐标，避免宽高比差异导致录像 PiP 被截断。
+    /// 用屏幕坐标同步 PiP 位置（向后兼容，单层场景）。
     func updatePiPLayout(screenOriginX: Float, screenOriginY: Float,
                          screenPipW: Float, screenPipH: Float,
                          screenW: Float, screenH: Float) {
+        let layout = StoredPiPLayout(
+            origin: CGPoint(x: CGFloat(screenOriginX), y: CGFloat(screenOriginY)),
+            size: CGSize(width: CGFloat(screenPipW), height: CGFloat(screenPipH)),
+            cornerRadius: 0.015
+        )
+        let bounds = CGSize(width: CGFloat(screenW), height: CGFloat(screenH))
         writeQueue.async { [weak self] in
             guard let self else { return }
-            self.storedScreenOriginX = screenOriginX
-            self.storedScreenOriginY = screenOriginY
-            self.storedScreenPipW    = screenPipW
-            self.storedScreenPipH    = screenPipH
-            self.storedScreenW       = screenW
-            self.storedScreenH       = screenH
-            self.applyScreenLayout()
+            self.storedPiPLayouts = [layout]
+            self.storedScreenBounds = bounds
+            self.applyLayerLayout()
         }
     }
 
-    private func applyScreenLayout(overrideBackW: Int? = nil, overrideBackH: Int? = nil,
-                                    overrideFrontW: Int? = nil, overrideFrontH: Int? = nil) {
-        guard let comp = compositor else { return }
-        guard let sW = storedScreenW, let sH = storedScreenH, sW > 0, sH > 0 else { return }
-        guard let ox = storedScreenOriginX, let oy = storedScreenOriginY else { return }
-        guard let pw = storedScreenPipW else { return }
+    // MARK: - 内部布局计算（在 writeQueue 上调用）
 
-        // 背景/PiP 尺寸取决于 pipCameraIsBack
+    private func applyLayerLayout(bgWOverride: Int? = nil, bgHOverride: Int? = nil,
+                                   pipWOverride: Int? = nil, pipHOverride: Int? = nil) {
+        guard let comp = compositor else { return }
+        let sW = Float(storedScreenBounds.width)
+        let sH = Float(storedScreenBounds.height)
+        guard sW > 0, sH > 0 else { return }
+
         let bgDims  = pipCameraIsBack ? frontDimensions : backDimensions
         let pipDims = pipCameraIsBack ? backDimensions  : frontDimensions
-        let rawBW = overrideBackW  ?? bgDims?.width
-        let rawBH = overrideBackH  ?? bgDims?.height
-        let rawFW = overrideFrontW ?? pipDims?.width
-        let rawFH = overrideFrontH ?? pipDims?.height
+        let rawBW = bgWOverride  ?? bgDims?.width
+        let rawBH = bgHOverride  ?? bgDims?.height
+        let rawFW = pipWOverride ?? pipDims?.width
+        let rawFH = pipHOverride ?? pipDims?.height
 
-        if let bW = rawBW.map(Float.init), let bH = rawBH.map(Float.init), bW > 0, bH > 0 {
-            // 预览使用 resizeAspectFill：确定缩放比例和裁切偏移
-            let videoAspect  = bW / bH
-            let screenAspect = sW / sH
-            let scale: Float
-            let cropX: Float
-            let cropY: Float
-            if videoAspect > screenAspect {
-                scale = sH / bH
-                cropX = (bW * scale - sW) / 2
-                cropY = 0
+        for (i, layout) in storedPiPLayouts.prefix(4).enumerated() {
+            let ox = Float(layout.origin.x)
+            let oy = Float(layout.origin.y)
+            let pw = Float(layout.size.width)
+
+            let normOriginX, normOriginY, normW, normH: Float
+
+            if let bW = rawBW.map({ Float($0) }),
+               let bH = rawBH.map({ Float($0) }), bW > 0, bH > 0 {
+                // 预览使用 resizeAspectFill：确定缩放比例和裁切偏移
+                let videoAspect  = bW / bH
+                let screenAspect = sW / sH
+                let scale: Float
+                let cropX: Float
+                let cropY: Float
+                if videoAspect > screenAspect {
+                    scale = sH / bH
+                    cropX = (bW * scale - sW) / 2
+                    cropY = 0
+                } else {
+                    scale = sW / bW
+                    cropX = 0
+                    cropY = (bH * scale - sH) / 2
+                }
+
+                normOriginX = (ox + cropX) / (scale * bW)
+                normOriginY = (oy + cropY) / (scale * bH)
+
+                normW = pw / (scale * bW)
+                let fW = rawFW.map { Float($0) } ?? bW
+                let fH = rawFH.map { Float($0) } ?? bH
+                normH = normW * bH * fW / (bW * fH)
             } else {
-                scale = sW / bW
-                cropX = 0
-                cropY = (bH * scale - sH) / 2
+                // 帧尺寸未知时回退：屏幕归一化
+                normW = pw / sW
+                normH = normW
+                normOriginX = ox / sW
+                normOriginY = oy / sH
             }
 
-            let normOriginX = (ox + cropX) / (scale * bW)
-            let normOriginY = (oy + cropY) / (scale * bH)
+            let clampedX = min(max(normOriginX, 0), max(1.0 - normW, 0))
+            let clampedY = min(max(normOriginY, 0), max(1.0 - normH, 0))
 
-            // 宽度由屏幕 PiP 宽精确映射；高度按前后摄宽高比推算，保证前摄内容无失真
-            let normW = pw / (scale * bW)
-            let fW = rawFW.map(Float.init) ?? bW
-            let fH = rawFH.map(Float.init) ?? bH
-            let normH = normW * bH * fW / (bW * fH)
-
-            // 防止 PiP 超出视频帧边界
-            comp.params.pipOriginX = min(max(normOriginX, 0), max(1.0 - normW, 0))
-            comp.params.pipOriginY = min(max(normOriginY, 0), max(1.0 - normH, 0))
-            comp.params.pipWidth   = normW
-            comp.params.pipHeight  = normH
-        } else {
-            // 帧尺寸未知时回退：使用屏幕归一化值（Y 轴按高填充时与视频坐标一致）
-            let normW = pw / sW
-            let normH = normW  // 无帧尺寸时假设前后摄宽高比相同
-            comp.params.pipOriginX = min(max(ox / sW, 0), max(1.0 - normW, 0))
-            comp.params.pipOriginY = min(max(oy / sH, 0), max(1.0 - normH, 0))
-            comp.params.pipWidth   = normW
-            comp.params.pipHeight  = normH
+            comp.updateLayer(at: i, params: PiPCompositor.LayerParams(
+                originX: clampedX, originY: clampedY,
+                sizeW: normW, sizeH: normH,
+                cornerRadius: layout.cornerRadius
+            ))
         }
+        comp.setActiveLayerCount(min(storedPiPLayouts.count, 4))
     }
 
     // MARK: - 拍照用快照
@@ -321,12 +345,13 @@ class VideoRecorder {
                 let bgW  = self.pipCameraIsBack ? fW : bW, bgH  = self.pipCameraIsBack ? fH : bH
                 let pipW = self.pipCameraIsBack ? bW : fW, pipH = self.pipCameraIsBack ? bH : fH
                 comp.configure(backWidth: bgW, backHeight: bgH, frontWidth: pipW, frontHeight: pipH)
-                self.applyScreenLayout(overrideBackW: bgW, overrideBackH: bgH,
-                                       overrideFrontW: pipW, overrideFrontH: pipH)
+                self.applyLayerLayout(bgWOverride: bgW, bgHOverride: bgH,
+                                      pipWOverride: pipW, pipHOverride: pipH)
             }
             let bgBuf      = self.pipCameraIsBack ? front : back
             let overlayBuf = self.pipCameraIsBack ? back  : front
-            let result = comp.composite(backBuffer: bgBuf, frontBuffer: overlayBuf)
+            let result = comp.composite(backBuffer: bgBuf,
+                                        overlays: [(buffer: overlayBuf, index: 0)])
             DispatchQueue.main.async { completion(result) }
         }
     }
@@ -342,13 +367,12 @@ class VideoRecorder {
 
         guard compositeWriter != nil || backWriter != nil || frontWriter != nil else { return }
 
-        // 背景帧 = pipCameraIsBack ? 前摄 : 后摄；PiP 帧反之
         let bgW  = pipCameraIsBack ? front.width  : back.width
         let bgH  = pipCameraIsBack ? front.height : back.height
         let pipW = pipCameraIsBack ? back.width   : front.width
         let pipH = pipCameraIsBack ? back.height  : front.height
         compositor?.configure(backWidth: bgW, backHeight: bgH, frontWidth: pipW, frontHeight: pipH)
-        applyScreenLayout()
+        applyLayerLayout()
 
         if let w = compositeWriter {
             compositeVideoInput = makeVideoInput(settings: videoSettings(width: bgW, height: bgH))
@@ -410,7 +434,8 @@ class VideoRecorder {
 
         let bgBuffer      = pipCameraIsBack ? frontBuffer : backBuffer
         let overlayBuffer = pipCameraIsBack ? backBuffer  : frontBuffer
-        guard let composed = compositor.composite(backBuffer: bgBuffer, frontBuffer: overlayBuffer) else { return }
+        guard let composed = compositor.composite(backBuffer: bgBuffer,
+                                                  overlays: [(buffer: overlayBuffer, index: 0)]) else { return }
 
         appendCompositeFrame(composed, presentationTime: pts)
     }

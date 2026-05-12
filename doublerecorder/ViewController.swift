@@ -16,6 +16,9 @@ class ViewController: UIViewController {
     private var isSwapped    = false
     private var configuredPiPCamera = AppSettings.shared.pipCamera
     private var recordingOrientationMask: UIInterfaceOrientationMask?
+    // PiP 窗口层对象（统一管理位置、大小、形状）
+    private let frontLayer = VideoLayer(source: .front, zOrder: 1)
+    // pipCorner 保留用于水印位置和吸附逻辑（从 frontLayer.screenOrigin 推断）
     private var pipCorner: PiPCorner = .bottomLeft
     private var lockedOrientation: AVCaptureVideoOrientation?
     private var recordingSeconds = 0
@@ -246,6 +249,8 @@ class ViewController: UIViewController {
     // MARK: - PiP Setup
 
     private func setupPiP() {
+        frontLayer.containerView = pipContainerView
+
         pipContainerView.layer.cornerRadius = 16
         pipContainerView.clipsToBounds      = true
         pipContainerView.layer.borderWidth  = 0.5
@@ -761,11 +766,9 @@ class ViewController: UIViewController {
             )
             pipContainerView.frame.origin = clamped
             pipFreeOrigin = clamped
-            videoRecorder.updatePiPLayout(
-                screenOriginX: Float(clamped.x), screenOriginY: Float(clamped.y),
-                screenPipW: Float(pipW), screenPipH: Float(pipH),
-                screenW: Float(size.width), screenH: Float(size.height)
-            )
+            frontLayer.screenOrigin = clamped
+            frontLayer.screenSize   = CGSize(width: pipW, height: pipH)
+            videoRecorder.syncLayers([frontLayer], screenBounds: size)
         } else {
             snapPiP(to: pipCorner, size: size, pipSize: CGSize(width: pipW, height: pipH),
                     margins: margins, animated: false)
@@ -849,11 +852,9 @@ class ViewController: UIViewController {
 
         let origin = pipPosition(for: corner, size: s, pipSize: ps, margins: m)
 
-        videoRecorder.updatePiPLayout(
-            screenOriginX: Float(origin.x), screenOriginY: Float(origin.y),
-            screenPipW: Float(ps.width), screenPipH: Float(ps.height),
-            screenW: Float(s.width), screenH: Float(s.height)
-        )
+        frontLayer.screenOrigin = origin
+        frontLayer.screenSize   = ps
+        videoRecorder.syncLayers([frontLayer], screenBounds: s)
 
         if animated {
             UIView.animate(withDuration: 0.22, delay: 0,
@@ -937,15 +938,13 @@ class ViewController: UIViewController {
             case (false, true):  pipCorner = .bottomLeft
             case (false, false): pipCorner = .bottomRight
             }
-            pipFreeOrigin = pipContainerView.frame.origin
-            updateWatermarkPosition()
             let origin = pipContainerView.frame.origin
             let pipSz  = pipContainerView.bounds.size
-            videoRecorder.updatePiPLayout(
-                screenOriginX: Float(origin.x), screenOriginY: Float(origin.y),
-                screenPipW: Float(pipSz.width), screenPipH: Float(pipSz.height),
-                screenW: Float(view.bounds.width), screenH: Float(view.bounds.height)
-            )
+            pipFreeOrigin = origin
+            frontLayer.screenOrigin = origin
+            frontLayer.screenSize   = pipSz
+            updateWatermarkPosition()
+            videoRecorder.syncLayers([frontLayer], screenBounds: view.bounds.size)
             applyOverlapFade()
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         default: break
