@@ -461,14 +461,17 @@ class VideoRecorder {
         guard let composed = compositor.composite(backBuffer: bgBuffer,
                                                   overlays: [(buffer: overlayBuffer, index: 0)]) else { return }
 
-        appendCompositeFrame(composed, presentationTime: pts)
+        let dur = CMSampleBufferGetDuration(sampleBuffer)
+        appendCompositeFrame(composed, presentationTime: pts, duration: dur)
     }
 
-    private func appendCompositeFrame(_ pixelBuffer: CVPixelBuffer, presentationTime: CMTime) {
+    private func appendCompositeFrame(_ pixelBuffer: CVPixelBuffer,
+                                      presentationTime: CMTime,
+                                      duration: CMTime) {
         guard let input = compositeVideoInput, input.isReadyForMoreMediaData else { return }
 
         var timingInfo = CMSampleTimingInfo(
-            duration: CMTime(value: 1, timescale: 30),
+            duration: duration,
             presentationTimeStamp: presentationTime,
             decodeTimeStamp: .invalid
         )
