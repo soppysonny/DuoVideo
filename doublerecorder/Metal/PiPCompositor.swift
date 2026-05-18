@@ -25,7 +25,7 @@ class PiPCompositor {
         var layer2: LayerParams
         var layer3: LayerParams
         var activeCount: Int32
-        var _pad0: Float = 0
+        var aspectRatio: Float = 1  // 输出帧宽高比，对应 Metal _pad0 位置
         var _pad1: Float = 0
         var _pad2: Float = 0
     }
@@ -92,6 +92,7 @@ class PiPCompositor {
             cornerRadius: 0.015, mirrorFront: 1
         )
         compositorParams.activeCount = 1
+        compositorParams.aspectRatio = Float(backWidth) / Float(backHeight)
     }
 
     func updateLayer(at index: Int, params: LayerParams) {

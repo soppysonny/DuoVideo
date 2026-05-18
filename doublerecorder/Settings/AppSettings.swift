@@ -120,6 +120,13 @@ final class AppSettings {
         set { UserDefaults.standard.set(newValue, forKey: "autoSaveToPhotos") }
     }
 
+    // MARK: - PiP Style
+
+    var pipStyleID: String {
+        get { UserDefaults.standard.string(forKey: "pipStyleID") ?? "standard" }
+        set { UserDefaults.standard.set(newValue, forKey: "pipStyleID") }
+    }
+
     // MARK: - Pro
 
     var isProUser: Bool {
@@ -133,5 +140,6 @@ extension Notification.Name {
     static let recordMirrorChanged  = Notification.Name("recordMirrorChanged")
     static let pipCameraChanged     = Notification.Name("pipCameraChanged")
     static let pipCropChanged       = Notification.Name("pipCropChanged")
+    static let pipStyleChanged      = Notification.Name("pipStyleChanged")
     static let iapProductLoaded     = Notification.Name("iapProductLoaded")
 }

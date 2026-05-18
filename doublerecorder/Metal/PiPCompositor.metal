@@ -22,15 +22,22 @@ struct LayerParams {
 struct CompositorParams {
     LayerParams layers[MAX_PIP_LAYERS];
     int   activeCount;
-    float _pad0;
+    float aspectRatio; // 输出帧宽高比 (width/height)，用于像素等比 SDF 计算
     float _pad1;
     float _pad2;
 };
 
-static float sdRoundedRect(float2 p, float2 origin, float2 size, float r) {
-    float2 center = origin + size * 0.5;
-    float2 q = abs(p - center) - size * 0.5 + r;
-    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+// 在像素等比坐标中计算圆角矩形 SDF，避免圆形在非方形视频中变为椭圆
+static float sdRoundedRect(float2 p, float2 origin, float2 size, float r, float ar) {
+    // 将 UV 坐标缩放到像素等比空间（X × ar，使 1 单位 = 1 像素高度）
+    float2 pS     = float2(p.x * ar,      p.y);
+    float2 oS     = float2(origin.x * ar, origin.y);
+    float2 sS     = float2(size.x * ar,   size.y);
+    float  rS     = r * ar;
+    float2 center = oS + sS * 0.5;
+    float2 q      = abs(pS - center) - sS * 0.5 + rS;
+    float  dist   = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rS;
+    return dist / ar; // 还原到 UV 空间供阈值比较
 }
 
 static float4 samplePiP(int idx, float2 uv,
@@ -76,7 +83,7 @@ fragment float4 pip_fragment(VertexOut in                      [[stage_in]],
 
     for (int i = 0; i < params.activeCount; i++) {
         LayerParams layer = params.layers[i];
-        float sdf = sdRoundedRect(uv, layer.origin, layer.size, layer.cornerRadius);
+        float sdf = sdRoundedRect(uv, layer.origin, layer.size, layer.cornerRadius, params.aspectRatio);
 
         if (sdf > 0.004) { continue; }
 

@@ -81,6 +81,7 @@
 "toggle.mirror_subtitle" = "前摄录制镜像翻转";
 "toggle.autosave_subtitle" = "录制完成后自动保存到相册";
 "section.pip_window" = "PiP 窗口";
+"section.pip_style" = "PiP 风格";
 "pip_crop.title" = "自定义范围";
 "pip_crop.subtitle" = "矩形框拖拽选择前摄显示范围";
 "pip_crop.full_frame" = "全画面";

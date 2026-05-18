@@ -19,6 +19,7 @@ class SettingsViewController: UIViewController {
     private var resTiles: [OptionTile] = []
     private var fpsTiles: [OptionTile] = []
     private var pipTiles: [OptionTile] = []
+    private var styleCells: [PiPStyleCell] = []
 
     // IAP state
     private var iapStatusLabel: UILabel?
@@ -158,7 +159,15 @@ class SettingsViewController: UIViewController {
         pipCropRow.onTap = { [weak self] in self?.onEditPiPCrop?() }
         pipCropRow.heightAnchor.constraint(equalToConstant: 64).isActive = true
         vStack.addArrangedSubview(pipCropRow)
-        vStack.setCustomSpacing(32, after: pipCropRow)
+        vStack.setCustomSpacing(24, after: pipCropRow)
+
+        // ── PiP 风格 ──────────────────────────────────────────
+        vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.pip_style", comment: "")))
+        vStack.setCustomSpacing(10, after: vStack.arrangedSubviews.last!)
+
+        let styleCard = buildPiPStyleCard()
+        vStack.addArrangedSubview(styleCard)
+        vStack.setCustomSpacing(32, after: styleCard)
 
         // ── 录制效果 ──────────────────────────────────────────
         vStack.addArrangedSubview(sectionLabel(NSLocalizedString("section.recording_effects", comment: "")))
@@ -267,6 +276,70 @@ class SettingsViewController: UIViewController {
         vStack.addArrangedSubview(feedbackBtn)
     }
 
+    private func buildPiPStyleCard() -> UIView {
+        let presets = PiPStylePreset.all
+        let columns = 3
+        let rows = Int(ceil(Double(presets.count) / Double(columns)))
+
+        let card = UIView()
+        card.backgroundColor = UIColor(white: 0.10, alpha: 1)
+        card.layer.cornerRadius = 12
+
+        let grid = UIStackView()
+        grid.axis = .vertical
+        grid.spacing = 8
+        grid.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(grid)
+
+        NSLayoutConstraint.activate([
+            grid.topAnchor.constraint(equalTo: card.topAnchor, constant: 12),
+            grid.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 12),
+            grid.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -12),
+            grid.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -12),
+        ])
+
+        let currentID = settings.pipStyleID
+        styleCells = []
+
+        for row in 0..<rows {
+            let rowStack = UIStackView()
+            rowStack.axis = .horizontal
+            rowStack.spacing = 8
+            rowStack.distribution = .fillEqually
+            rowStack.heightAnchor.constraint(equalToConstant: 108).isActive = true
+
+            for col in 0..<columns {
+                let idx = row * columns + col
+                if idx < presets.count {
+                    let preset = presets[idx]
+                    let cell = PiPStyleCell(preset: preset)
+                    cell.isSelected = (preset.id == currentID)
+                    cell.onTap = { [weak self] in
+                        guard let self else { return }
+                        self.settings.pipStyleID = preset.id
+                        self.syncStyleCells()
+                        NotificationCenter.default.post(name: .pipStyleChanged, object: nil)
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    }
+                    styleCells.append(cell)
+                    rowStack.addArrangedSubview(cell)
+                } else {
+                    rowStack.addArrangedSubview(UIView())
+                }
+            }
+            grid.addArrangedSubview(rowStack)
+        }
+
+        return card
+    }
+
+    private func syncStyleCells() {
+        let currentID = settings.pipStyleID
+        zip(styleCells, PiPStylePreset.all).forEach { cell, preset in
+            cell.isSelected = (preset.id == currentID)
+        }
+    }
+
     private func sectionLabel(_ text: String) -> UILabel {
         let l = UILabel()
         l.text      = text
@@ -312,6 +385,7 @@ class SettingsViewController: UIViewController {
         syncResTiles()
         syncFpsTiles()
         syncPipTiles()
+        syncStyleCells()
         syncIAPUI()
     }
 
@@ -772,4 +846,147 @@ final class SettingsActionRow: UIControl {
     }
 
     @objc private func handleTap() { onTap?() }
+}
+
+// MARK: - PiPStyleCell
+
+final class PiPStyleCell: UIView {
+
+    var isSelected: Bool = false { didSet { updateAppearance() } }
+    var onTap: (() -> Void)?
+
+    private let thumbnail = PiPStyleThumbnail()
+    private let nameLabel = UILabel()
+    private let checkBadge = UIImageView()
+
+    init(preset: PiPStylePreset) {
+        super.init(frame: .zero)
+        layer.cornerRadius = 10
+        layer.borderWidth = 1.5
+        clipsToBounds = true
+
+        thumbnail.preset = preset
+        thumbnail.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(thumbnail)
+
+        nameLabel.text = preset.name
+        nameLabel.font = UIFont.systemFont(ofSize: 11, weight: .semibold)
+        nameLabel.textAlignment = .center
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(nameLabel)
+
+        let cfg = UIImage.SymbolConfiguration(pointSize: 12, weight: .bold)
+        checkBadge.image = UIImage(systemName: "checkmark.circle.fill", withConfiguration: cfg)
+        checkBadge.tintColor = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 1)
+        checkBadge.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(checkBadge)
+
+        NSLayoutConstraint.activate([
+            thumbnail.topAnchor.constraint(equalTo: topAnchor, constant: 10),
+            thumbnail.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            thumbnail.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            thumbnail.bottomAnchor.constraint(equalTo: nameLabel.topAnchor, constant: -6),
+
+            nameLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+            nameLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+            nameLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -9),
+            nameLabel.heightAnchor.constraint(equalToConstant: 14),
+
+            checkBadge.topAnchor.constraint(equalTo: topAnchor, constant: 5),
+            checkBadge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -5),
+            checkBadge.widthAnchor.constraint(equalToConstant: 16),
+            checkBadge.heightAnchor.constraint(equalToConstant: 16),
+        ])
+
+        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(cellTapped)))
+        updateAppearance()
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    @objc private func cellTapped() { onTap?() }
+
+    private func updateAppearance() {
+        let amber = UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 1)
+        if isSelected {
+            backgroundColor = amber.withAlphaComponent(0.10)
+            layer.borderColor = amber.withAlphaComponent(0.55).cgColor
+            nameLabel.textColor = amber
+            checkBadge.isHidden = false
+        } else {
+            backgroundColor = UIColor(white: 0.17, alpha: 1)
+            layer.borderColor = UIColor.white.withAlphaComponent(0.07).cgColor
+            nameLabel.textColor = UIColor.white.withAlphaComponent(0.55)
+            checkBadge.isHidden = true
+        }
+    }
+}
+
+// MARK: - PiPStyleThumbnail
+
+private final class PiPStyleThumbnail: UIView {
+
+    var preset: PiPStylePreset?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        backgroundColor = .clear
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    override func draw(_ rect: CGRect) {
+        guard let ctx = UIGraphicsGetCurrentContext(), let preset else { return }
+
+        UIColor(red: 0.09, green: 0.09, blue: 0.11, alpha: 1).setFill()
+        UIBezierPath(roundedRect: rect, cornerRadius: 6).fill()
+
+        let inset: CGFloat = 4
+        let bg = rect.insetBy(dx: inset, dy: inset)
+        UIColor(red: 0.22, green: 0.22, blue: 0.26, alpha: 1).setFill()
+        UIBezierPath(roundedRect: bg, cornerRadius: 4).fill()
+
+        let pipW = bg.width * CGFloat(preset.sizeRatio) * 0.78
+        let pipH: CGFloat
+        switch preset.shape {
+        case .roundedRect: pipH = pipW * 1.33
+        case .circle:      pipH = pipW
+        }
+        let pad: CGFloat = 3
+        let pipX: CGFloat
+        let pipY: CGFloat
+        switch preset.corner {
+        case .topLeft:     pipX = bg.minX + pad; pipY = bg.minY + pad
+        case .topRight:    pipX = bg.maxX - pipW - pad; pipY = bg.minY + pad
+        case .bottomLeft:  pipX = bg.minX + pad; pipY = bg.maxY - pipH - pad
+        case .bottomRight: pipX = bg.maxX - pipW - pad; pipY = bg.maxY - pipH - pad
+        }
+        let pipRect = CGRect(x: pipX, y: pipY, width: pipW, height: pipH)
+
+        UIColor(red: 0.78, green: 0.78, blue: 0.82, alpha: 1).setFill()
+        switch preset.shape {
+        case .roundedRect:
+            UIBezierPath(roundedRect: pipRect, cornerRadius: 2).fill()
+        case .circle:
+            let side = min(pipW, pipH)
+            UIBezierPath(ovalIn: CGRect(x: pipX + (pipW - side) / 2,
+                                        y: pipY + (pipH - side) / 2,
+                                        width: side, height: side)).fill()
+        }
+
+        ctx.saveGState()
+        UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 0.40).setStroke()
+        let border: UIBezierPath
+        switch preset.shape {
+        case .roundedRect:
+            border = UIBezierPath(roundedRect: pipRect.insetBy(dx: 0.5, dy: 0.5), cornerRadius: 2)
+        case .circle:
+            let side = min(pipW, pipH)
+            border = UIBezierPath(ovalIn: CGRect(x: pipX + (pipW - side) / 2 + 0.5,
+                                                  y: pipY + (pipH - side) / 2 + 0.5,
+                                                  width: side - 1, height: side - 1))
+        }
+        border.lineWidth = 1
+        border.stroke()
+        ctx.restoreGState()
+    }
 }

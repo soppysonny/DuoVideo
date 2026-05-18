@@ -81,6 +81,7 @@
 "toggle.mirror_subtitle" = "Mirror front camera recording";
 "toggle.autosave_subtitle" = "Auto save to Photos after recording";
 "section.pip_window" = "PIP WINDOW";
+"section.pip_style" = "PIP STYLE";
 "pip_crop.title" = "CUSTOM RANGE";
 "pip_crop.subtitle" = "Drag the rectangle to select front camera display area";
 "pip_crop.full_frame" = "FULL FRAME";
