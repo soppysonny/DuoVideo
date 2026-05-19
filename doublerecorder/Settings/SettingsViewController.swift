@@ -19,7 +19,7 @@ class SettingsViewController: UIViewController {
     private var resTiles: [OptionTile] = []
     private var fpsTiles: [OptionTile] = []
     private var pipTiles: [OptionTile] = []
-    private var styleCells: [PiPStyleCell] = []
+    private var styleCells: [PiPStyleSettingsCell] = []
 
     // IAP state
     private var iapStatusLabel: UILabel?
@@ -312,7 +312,7 @@ class SettingsViewController: UIViewController {
                 let idx = row * columns + col
                 if idx < presets.count {
                     let preset = presets[idx]
-                    let cell = PiPStyleCell(preset: preset)
+                    let cell = PiPStyleSettingsCell(preset: preset)
                     cell.isSelected = (preset.id == currentID)
                     cell.onTap = { [weak self] in
                         guard let self else { return }
@@ -848,9 +848,9 @@ final class SettingsActionRow: UIControl {
     @objc private func handleTap() { onTap?() }
 }
 
-// MARK: - PiPStyleCell
+// MARK: - PiPStyleSettingsCell
 
-final class PiPStyleCell: UIView {
+final class PiPStyleSettingsCell: UIView {
 
     var isSelected: Bool = false { didSet { updateAppearance() } }
     var onTap: (() -> Void)?
