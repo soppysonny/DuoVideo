@@ -1676,7 +1676,8 @@ class ViewController: UIViewController {
 
     private func applyPiPCropState() {
         let cropRect = AppSettings.shared.pipCropRect
-        frontPreviewView.visibleRect = cropRect
+        // 圆形用全帧 + resizeAspectFill 实现中心正方形裁剪，与合成器保持一致
+        frontPreviewView.visibleRect = pipIsCircle ? .fullFrame : cropRect
         videoRecorder.updatePiPCropRect(cropRect)
         videoRecorder.updateFrontMirror(isFrontMirror)
     }

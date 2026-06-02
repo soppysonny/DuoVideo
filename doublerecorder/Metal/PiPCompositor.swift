@@ -41,7 +41,7 @@ class PiPCompositor {
     private static let defaultLayer = LayerParams(
         originX: 0.69, originY: 0.60, sizeW: 0.28, sizeH: 0.37,
         cropOriginX: 0, cropOriginY: 0, cropSizeW: 1, cropSizeH: 1,
-        cornerRadius: 0.015, mirrorFront: 1
+        cornerRadius: 0.015, mirrorFront: 0
     )
     private static let emptyLayer = LayerParams(
         originX: 0, originY: 0, sizeW: 0, sizeH: 0,
@@ -89,7 +89,7 @@ class PiPCompositor {
             originX: 1.0 - pipW - margin, originY: 1.0 - pipH - margin,
             sizeW: pipW, sizeH: pipH,
             cropOriginX: 0, cropOriginY: 0, cropSizeW: 1, cropSizeH: 1,
-            cornerRadius: 0.015, mirrorFront: 1
+            cornerRadius: 0.015, mirrorFront: 0
         )
         compositorParams.activeCount = 1
         compositorParams.aspectRatio = Float(backWidth) / Float(backHeight)
