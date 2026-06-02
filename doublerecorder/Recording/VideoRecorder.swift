@@ -302,72 +302,84 @@ class VideoRecorder {
             var cropOriginX: Float = 0, cropOriginY: Float = 0
             var cropSizeW:   Float = 1, cropSizeH:   Float = 1
 
-            if layout.isSplitH {
-                // 全宽下半：固定 UV，不依赖屏幕坐标
-                comp.updateLayer(at: i, params: PiPCompositor.LayerParams(
-                    originX: 0, originY: 0.5,
-                    sizeW: 1.0, sizeH: 0.5,
-                    cropOriginX: 0, cropOriginY: 0, cropSizeW: 1, cropSizeH: 1,
-                    cornerRadius: 0, mirrorFront: 0
-                ))
-                continue
-            } else if let bW = rawBW.map({ Float($0) }),
-               let bH = rawBH.map({ Float($0) }), bW > 0, bH > 0 {
-                // 预览使用 resizeAspectFill：确定缩放比例和裁切偏移
-                let videoAspect  = bW / bH
-                let screenAspect = sW / sH
-                let scale: Float
-                let cropX: Float
-                let cropY: Float
-                if videoAspect > screenAspect {
-                    scale = sH / bH
-                    cropX = (bW * scale - sW) / 2
-                    cropY = 0
-                } else {
-                    scale = sW / bW
-                    cropX = 0
-                    cropY = (bH * scale - sH) / 2
-                }
-                normOriginX = (ox + cropX) / (scale * bW)
-                normOriginY = (oy + cropY) / (scale * bH)
-                normW = pw / (scale * bW)
-
-                let fW = rawFW.map { Float($0) } ?? bW
-                let fH = rawFH.map { Float($0) } ?? bH
-
-                if layout.isCircle {
-                    // 边界框在输出像素空间为正方形，避免 SDF 生成胶囊形
-                    normH = normW * bW / bH
-                    // 前摄中心正方形裁剪，匹配预览的 resizeAspectFill 行为
-                    let fAspect = fW / fH
-                    if fAspect > 1.0 {        // 横屏前摄
-                        cropSizeW   = fH / fW
-                        cropOriginX = (1.0 - cropSizeW) / 2.0
-                    } else if fAspect < 1.0 { // 竖屏前摄
-                        cropSizeH   = fW / fH
-                        cropOriginY = (1.0 - cropSizeH) / 2.0
-                    }
-                } else {
-                    let userCrop = AppSettings.shared.pipCropRect
-                    let ucW = Float(userCrop.width), ucH = Float(userCrop.height)
-                    normH = normW * bH * fW * ucH / (bW * fH * ucW)
-                    cropOriginX = Float(userCrop.x);  cropOriginY = Float(userCrop.y)
-                    cropSizeW   = Float(userCrop.width); cropSizeH = Float(userCrop.height)
-                }
-            } else {
+            guard let bW = rawBW.map({ Float($0) }),
+                  let bH = rawBH.map({ Float($0) }), bW > 0, bH > 0 else {
                 // 帧尺寸未知时回退：屏幕归一化
-                normW = pw / sW
-                normOriginX = ox / sW
-                normOriginY = oy / sH
+                normW = pw / sW; normOriginX = ox / sW; normOriginY = oy / sH
                 if layout.isCircle {
                     normH = normW
-                    // fW/fH 未知，保持默认全帧（稍后 tryInitializeWriters 会重算）
                 } else {
                     let crop = AppSettings.shared.pipCropRect
                     normH = normW * Float(crop.height) / Float(crop.width)
-                    cropOriginX = Float(crop.x);  cropOriginY = Float(crop.y)
-                    cropSizeW   = Float(crop.width); cropSizeH = Float(crop.height)
+                    cropOriginX = Float(crop.x); cropOriginY = Float(crop.y)
+                    cropSizeW = Float(crop.width); cropSizeH = Float(crop.height)
                 }
+                let clampedX2 = min(max(normOriginX, 0), max(1.0 - normW, 0))
+                let clampedY2 = min(max(normOriginY, 0), max(1.0 - normH, 0))
+                let cornerR2: Float = layout.isCircle ? normW / 2 : layout.cornerRadius
+                comp.updateLayer(at: i, params: PiPCompositor.LayerParams(
+                    originX: clampedX2, originY: clampedY2, sizeW: normW, sizeH: normH,
+                    cropOriginX: cropOriginX, cropOriginY: cropOriginY,
+                    cropSizeW: cropSizeW, cropSizeH: cropSizeH,
+                    cornerRadius: cornerR2, mirrorFront: 0))
+                continue
+            }
+
+            let fW = rawFW.map { Float($0) } ?? bW
+            let fH = rawFH.map { Float($0) } ?? bH
+
+            if layout.isSplitH {
+                // 全宽下半：固定位置，resizeAspectFill 裁剪匹配预览
+                let scaleX = bW / fW, scaleY = (bH / 2) / fH
+                if scaleX >= scaleY {  // 以宽填满，裁剪高度
+                    cropSizeH   = scaleY / scaleX
+                    cropOriginY = (1.0 - cropSizeH) / 2.0
+                } else {               // 以高填满，裁剪宽度
+                    cropSizeW   = scaleX / scaleY
+                    cropOriginX = (1.0 - cropSizeW) / 2.0
+                }
+                comp.updateLayer(at: i, params: PiPCompositor.LayerParams(
+                    originX: 0, originY: 0.5, sizeW: 1.0, sizeH: 0.5,
+                    cropOriginX: cropOriginX, cropOriginY: cropOriginY,
+                    cropSizeW: cropSizeW, cropSizeH: cropSizeH,
+                    cornerRadius: 0, mirrorFront: 0))
+                continue
+            }
+
+            // 预览使用 resizeAspectFill：确定背景摄缩放比例和裁切偏移
+            let videoAspect  = bW / bH
+            let screenAspect = sW / sH
+            let scale: Float
+            let cropX: Float
+            let cropY: Float
+            if videoAspect > screenAspect {
+                scale = sH / bH; cropX = (bW * scale - sW) / 2; cropY = 0
+            } else {
+                scale = sW / bW; cropX = 0; cropY = (bH * scale - sH) / 2
+            }
+            normOriginX = (ox + cropX) / (scale * bW)
+            normOriginY = (oy + cropY) / (scale * bH)
+            normW = pw / (scale * bW)
+
+            if layout.isCircle {
+                // 边界框在输出像素空间为正方形
+                normH = normW * bW / bH
+                // 前摄中心正方形裁剪（resizeAspectFill 等效）
+                if fW > fH {          // 横屏前摄
+                    cropSizeW   = fH / fW
+                    cropOriginX = (1.0 - cropSizeW) / 2.0
+                } else if fH > fW {   // 竖屏前摄
+                    cropSizeH   = fW / fH
+                    cropOriginY = (1.0 - cropSizeH) / 2.0
+                }
+            } else {
+                let userCrop = AppSettings.shared.pipCropRect
+                let ucW = Float(userCrop.width), ucH = Float(userCrop.height)
+                // normH 保证前摄 crop 区域在视频中无失真显示
+                // 正确公式：bW*fH（而非原来的 bH*fW，后者仅在 back==front 宽高比时偶然正确）
+                normH = normW * bW * fH * ucH / (bH * fW * ucW)
+                cropOriginX = Float(userCrop.x); cropOriginY = Float(userCrop.y)
+                cropSizeW = Float(userCrop.width); cropSizeH = Float(userCrop.height)
             }
 
             let clampedX = min(max(normOriginX, 0), max(1.0 - normW, 0))
