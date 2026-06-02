@@ -9,7 +9,10 @@
       "Bash(xcodebuild -project doublerecorder.xcodeproj -scheme doublerecorder -destination 'generic/platform=iOS' -configuration Debug build)",
       "Bash(xargs cat)",
       "Bash(xcodebuild -project doublerecorder.xcodeproj -scheme doublerecorder -destination \"generic/platform=iOS\" -configuration Debug build)",
-      "Bash(xcodebuild -project /Users/lava/Desktop/DuoVideo/doublerecorder.xcodeproj -scheme doublerecorder -destination \"generic/platform=iOS\" -configuration Debug build)"
+      "Bash(xcodebuild -project /Users/lava/Desktop/DuoVideo/doublerecorder.xcodeproj -scheme doublerecorder -destination \"generic/platform=iOS\" -configuration Debug build)",
+      "Bash(xcodebuild -scheme doublerecorder -destination 'generic/platform=iOS' -configuration Debug build)",
+      "Bash(xcodebuild -project doublerecorder.xcodeproj -scheme doublerecorder -destination 'generic/platform=iOS' -quiet)",
+      "Bash(xcodebuild -project doublerecorder.xcodeproj -scheme doublerecorder -destination 'generic/platform=iOS')"
     ]
   }
 }
