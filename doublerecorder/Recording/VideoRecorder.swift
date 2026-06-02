@@ -320,17 +320,26 @@ class VideoRecorder {
                 normOriginY = (oy + cropY) / (scale * bH)
 
                 normW = pw / (scale * bW)
-                let fW = rawFW.map { Float($0) } ?? bW
-                let fH = rawFH.map { Float($0) } ?? bH
-                // 高度按前后摄宽高比及裁剪比推算，保证前摄内容无失真
-                let cropRect = AppSettings.shared.pipCropRect
-                let cropW = Float(cropRect.width), cropH = Float(cropRect.height)
-                normH = normW * bH * fW * cropH / (bW * fH * cropW)
+                if layout.isCircle {
+                    // 圆形：使边界框在输出像素空间中为正方形，避免 SDF 生成胶囊形
+                    normH = normW * bW / bH
+                } else {
+                    let fW = rawFW.map { Float($0) } ?? bW
+                    let fH = rawFH.map { Float($0) } ?? bH
+                    // 高度按前后摄宽高比及裁剪比推算，保证前摄内容无失真
+                    let cropRect = AppSettings.shared.pipCropRect
+                    let cropW = Float(cropRect.width), cropH = Float(cropRect.height)
+                    normH = normW * bH * fW * cropH / (bW * fH * cropW)
+                }
             } else {
                 // 帧尺寸未知时回退：屏幕归一化，以裁剪宽高比修正高度
                 normW = pw / sW
-                let crop = AppSettings.shared.pipCropRect
-                normH = normW * Float(crop.height) / Float(crop.width)
+                if layout.isCircle {
+                    normH = normW
+                } else {
+                    let crop = AppSettings.shared.pipCropRect
+                    normH = normW * Float(crop.height) / Float(crop.width)
+                }
                 normOriginX = ox / sW
                 normOriginY = oy / sH
             }
