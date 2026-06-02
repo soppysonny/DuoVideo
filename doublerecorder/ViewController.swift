@@ -347,8 +347,9 @@ class ViewController: UIViewController {
             pipSizeRatio     = saved.sizeRatio
             pipIsCircle      = saved.isCircle
             frontLayer.shape = saved.shape
-            pipCorner        = saved.corner
         }
+        // Corner position is independent of style — restore separately
+        pipCorner = AppSettings.shared.pipCorner
         applyPiPCropState()
     }
 
@@ -901,6 +902,7 @@ class ViewController: UIViewController {
     private func snapPiP(to corner: PiPCorner, size: CGSize? = nil, pipSize: CGSize? = nil,
                           margins: PiPMargins? = nil, animated: Bool = true) {
         pipCorner = corner
+        AppSettings.shared.pipCorner = corner
         let s   = size    ?? view.bounds.size
         let ps  = pipSize ?? pipContainerView.bounds.size
         let isL = s.width > s.height
@@ -939,7 +941,7 @@ class ViewController: UIViewController {
         frontLayer.shape = style.shape
         AppSettings.shared.pipStyleID = style.id
         pipFreeOrigin = nil
-        pipCorner     = style.corner
+        // 保持当前角落位置，位置与样式无关
 
         let size = view.bounds.size
         let safe = view.safeAreaInsets
@@ -982,7 +984,7 @@ class ViewController: UIViewController {
         // 非圆形：恢复用户设置的 crop rect
         frontPreviewView.visibleRect = style.isCircle ? .fullFrame : AppSettings.shared.pipCropRect
 
-        snapPiP(to: style.corner, size: size, pipSize: CGSize(width: pipW, height: pipH),
+        snapPiP(to: pipCorner, size: size, pipSize: CGSize(width: pipW, height: pipH),
                 margins: margins, animated: true)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
@@ -1055,6 +1057,7 @@ class ViewController: UIViewController {
             case (false, true):  pipCorner = .bottomLeft
             case (false, false): pipCorner = .bottomRight
             }
+            AppSettings.shared.pipCorner = pipCorner
             let origin = pipContainerView.frame.origin
             let pipSz  = pipContainerView.bounds.size
             pipFreeOrigin = origin

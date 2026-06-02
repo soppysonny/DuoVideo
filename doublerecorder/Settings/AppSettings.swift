@@ -127,6 +127,11 @@ final class AppSettings {
         set { UserDefaults.standard.set(newValue, forKey: "pipStyleID") }
     }
 
+    var pipCorner: PiPCorner {
+        get { PiPCorner(rawValue: UserDefaults.standard.string(forKey: "pipCorner") ?? "") ?? .bottomRight }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "pipCorner") }
+    }
+
     // MARK: - Pro
 
     var isProUser: Bool {
