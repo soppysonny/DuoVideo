@@ -945,11 +945,30 @@ private final class PiPStyleThumbnail: UIView {
         UIColor(red: 0.22, green: 0.22, blue: 0.26, alpha: 1).setFill()
         UIBezierPath(roundedRect: bg, cornerRadius: 4).fill()
 
+        if case .splitH = preset.shape {
+            let topRect    = CGRect(x: bg.minX, y: bg.minY, width: bg.width, height: bg.height / 2)
+            let bottomRect = CGRect(x: bg.minX, y: bg.midY,  width: bg.width, height: bg.height / 2)
+            UIColor(red: 0.22, green: 0.22, blue: 0.26, alpha: 1).setFill()
+            UIBezierPath(roundedRect: topRect,    cornerRadius: 3).fill()
+            UIColor(red: 0.78, green: 0.78, blue: 0.82, alpha: 1).setFill()
+            UIBezierPath(roundedRect: bottomRect, cornerRadius: 3).fill()
+            ctx.saveGState()
+            UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 0.40).setStroke()
+            let divider = UIBezierPath()
+            divider.move(to: CGPoint(x: bg.minX, y: bg.midY))
+            divider.addLine(to: CGPoint(x: bg.maxX, y: bg.midY))
+            divider.lineWidth = 1
+            divider.stroke()
+            ctx.restoreGState()
+            return
+        }
+
         let pipW = bg.width * CGFloat(preset.sizeRatio) * 0.78
         let pipH: CGFloat
         switch preset.shape {
         case .roundedRect: pipH = pipW * 1.33
         case .circle:      pipH = pipW
+        case .splitH:      pipH = 0
         }
         let pad: CGFloat = 3
         let pipX: CGFloat
@@ -971,6 +990,7 @@ private final class PiPStyleThumbnail: UIView {
             UIBezierPath(ovalIn: CGRect(x: pipX + (pipW - side) / 2,
                                         y: pipY + (pipH - side) / 2,
                                         width: side, height: side)).fill()
+        case .splitH: break
         }
 
         ctx.saveGState()
@@ -984,6 +1004,8 @@ private final class PiPStyleThumbnail: UIView {
             border = UIBezierPath(ovalIn: CGRect(x: pipX + (pipW - side) / 2 + 0.5,
                                                   y: pipY + (pipH - side) / 2 + 0.5,
                                                   width: side - 1, height: side - 1))
+        case .splitH:
+            border = UIBezierPath()
         }
         border.lineWidth = 1
         border.stroke()

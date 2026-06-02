@@ -8,6 +8,7 @@ enum VideoSource {
 enum LayerShape {
     case roundedRect(cornerRadius: Float)
     case circle
+    case splitH  // 全宽下半：UV (0, 0.5, 1, 0.5)，不可拖拽
 }
 
 final class VideoLayer {
@@ -42,12 +43,15 @@ final class VideoLayer {
         return false
     }
 
-    // For roundedRect: returns the normalized corner radius.
-    // For circle: returns 0 — VideoRecorder computes min(normW,normH)/2 in normalized video space.
+    var isSplitH: Bool {
+        if case .splitH = shape { return true }
+        return false
+    }
+
     var normalizedCornerRadius: Float {
         switch shape {
         case .roundedRect(let r): return r
-        case .circle:             return 0
+        case .circle, .splitH:   return 0
         }
     }
 }

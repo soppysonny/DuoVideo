@@ -188,9 +188,30 @@ private final class StyleThumbnailView: UIView {
         UIColor(red: 0.12, green: 0.12, blue: 0.14, alpha: 1).setFill()
         UIBezierPath(roundedRect: rect, cornerRadius: 8).fill()
 
-        // Main camera fill (inset)
         let inset: CGFloat = 5
         let bg = rect.insetBy(dx: inset, dy: inset)
+
+        if case .splitH = preset.shape {
+            // 均分：上下各半，不同颜色区分两个摄像头
+            let topRect    = CGRect(x: bg.minX, y: bg.minY, width: bg.width, height: bg.height / 2)
+            let bottomRect = CGRect(x: bg.minX, y: bg.midY,  width: bg.width, height: bg.height / 2)
+            UIColor(red: 0.28, green: 0.28, blue: 0.32, alpha: 1).setFill()
+            UIBezierPath(roundedRect: topRect,    cornerRadius: 4).fill()
+            UIColor(red: 0.85, green: 0.85, blue: 0.88, alpha: 1).setFill()
+            UIBezierPath(roundedRect: bottomRect, cornerRadius: 4).fill()
+            // Amber divider line
+            ctx.saveGState()
+            UIColor(red: 1, green: 0.698, blue: 0.247, alpha: 0.55).setStroke()
+            let divider = UIBezierPath()
+            divider.move(to: CGPoint(x: bg.minX, y: bg.midY))
+            divider.addLine(to: CGPoint(x: bg.maxX, y: bg.midY))
+            divider.lineWidth = 1
+            divider.stroke()
+            ctx.restoreGState()
+            return
+        }
+
+        // Main camera fill (inset)
         UIColor(red: 0.28, green: 0.28, blue: 0.32, alpha: 1).setFill()
         UIBezierPath(roundedRect: bg, cornerRadius: 5).fill()
 
@@ -221,6 +242,7 @@ private final class StyleThumbnailView: UIView {
             let cr = CGRect(x: pipX + (pipW - side) / 2, y: pipY + (pipH - side) / 2,
                             width: side, height: side)
             UIBezierPath(ovalIn: cr).fill()
+        case .splitH: break
         }
 
         // Amber border for the PiP rectangle
@@ -235,6 +257,8 @@ private final class StyleThumbnailView: UIView {
             let cr = CGRect(x: pipX + (pipW - side) / 2 + 0.5, y: pipY + (pipH - side) / 2 + 0.5,
                             width: side - 1, height: side - 1)
             strokePath = UIBezierPath(ovalIn: cr)
+        case .splitH:
+            strokePath = UIBezierPath()
         }
         strokePath.lineWidth = 1
         strokePath.stroke()
@@ -245,6 +269,7 @@ private final class StyleThumbnailView: UIView {
         switch shape {
         case .roundedRect: return pipW * 1.35  // approximate portrait aspect
         case .circle:      return pipW
+        case .splitH:      return 0
         }
     }
 }

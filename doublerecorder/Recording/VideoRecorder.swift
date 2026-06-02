@@ -33,6 +33,7 @@ class VideoRecorder {
         let size:         CGSize
         let cornerRadius: Float
         let isCircle:     Bool
+        let isSplitH:     Bool
     }
     private var storedPiPLayouts: [StoredPiPLayout] = []
     private var storedScreenBounds: CGSize = .zero
@@ -233,7 +234,8 @@ class VideoRecorder {
             .sorted { $0.zOrder < $1.zOrder }
             .map { layer -> StoredPiPLayout in
                 StoredPiPLayout(origin: layer.screenOrigin, size: layer.screenSize,
-                                cornerRadius: layer.normalizedCornerRadius, isCircle: layer.isCircle)
+                                cornerRadius: layer.normalizedCornerRadius,
+                                isCircle: layer.isCircle, isSplitH: layer.isSplitH)
             }
         let bounds = screenBounds
         writeQueue.async { [weak self] in
@@ -264,7 +266,7 @@ class VideoRecorder {
             origin: CGPoint(x: CGFloat(screenOriginX), y: CGFloat(screenOriginY)),
             size: CGSize(width: CGFloat(screenPipW), height: CGFloat(screenPipH)),
             cornerRadius: 0.015,
-            isCircle: false
+            isCircle: false, isSplitH: false
         )
         let bounds = CGSize(width: CGFloat(screenW), height: CGFloat(screenH))
         writeQueue.async { [weak self] in
@@ -298,7 +300,18 @@ class VideoRecorder {
 
             let normOriginX, normOriginY, normW, normH: Float
 
-            if let bW = rawBW.map({ Float($0) }),
+            if layout.isCircle == false && layout.isSplitH {
+                // 全宽下半：固定 UV，不依赖屏幕坐标
+                normOriginX = 0; normOriginY = 0.5
+                normW = 1.0;     normH = 0.5
+                comp.updateLayer(at: i, params: PiPCompositor.LayerParams(
+                    originX: normOriginX, originY: normOriginY,
+                    sizeW: normW, sizeH: normH,
+                    cropOriginX: 0, cropOriginY: 0, cropSizeW: 1, cropSizeH: 1,
+                    cornerRadius: 0, mirrorFront: 1
+                ))
+                continue
+            } else if let bW = rawBW.map({ Float($0) }),
                let bH = rawBH.map({ Float($0) }), bW > 0, bH > 0 {
                 // 预览使用 resizeAspectFill：确定缩放比例和裁切偏移
                 let videoAspect  = bW / bH

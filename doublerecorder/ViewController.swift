@@ -747,7 +747,38 @@ class ViewController: UIViewController {
         }
     }
 
+    private func layoutSplitPiP(size: CGSize) {
+        let w = size.width
+        let h = size.height / 2
+        pipContainerView.bounds = CGRect(x: 0, y: 0, width: w, height: h)
+        pipContainerView.frame.origin = CGPoint(x: 0, y: size.height / 2)
+        frontPreviewView.frame = pipContainerView.bounds
+        pipContainerView.layer.cornerRadius = 0
+        frontLayer.screenOrigin = CGPoint(x: 0, y: size.height / 2)
+        frontLayer.screenSize   = CGSize(width: w, height: h)
+        videoRecorder.syncLayers([frontLayer], screenBounds: size)
+        updateWatermarkPosition()
+        pipLabelView.frame = CGRect(x: 0, y: 0, width: w, height: 28)
+        pipLabelView.layer.sublayers?.compactMap { $0 as? CAGradientLayer }.forEach {
+            $0.frame = CGRect(x: 0, y: 0, width: w, height: 28)
+        }
+        if let dragDots = pipLabelView.subviews.first(where: { $0 is DragDotsView }) {
+            dragDots.frame = CGRect(x: w - 8 - dragDots.bounds.width, y: (28 - 14) / 2,
+                                    width: dragDots.bounds.width, height: dragDots.bounds.height)
+        }
+        pipBottomView.frame = CGRect(x: 0, y: h - 26, width: w, height: 26)
+        pipBottomView.layer.sublayers?.compactMap { $0 as? CAGradientLayer }.forEach {
+            $0.frame = CGRect(x: 0, y: 0, width: w, height: 26)
+        }
+        pipRecBorderLayer.frame = CGRect(x: 0, y: 0, width: w, height: h)
+        pipRecBorderLayer.cornerRadius = 0
+    }
+
     private func layoutPiP(size: CGSize, isLandscape: Bool, safe: UIEdgeInsets, shorter: CGFloat) {
+        if frontLayer.isSplitH {
+            layoutSplitPiP(size: size)
+            return
+        }
         guard !pipIsDragging else { return }
 
         // pipFrameAspect 随 videoOrientation 变化（竖屏=9/16，横屏=16/9）。
@@ -899,15 +930,21 @@ class ViewController: UIViewController {
         pipIsCircle      = style.isCircle
         frontLayer.shape = style.shape
         AppSettings.shared.pipStyleID = style.id
-        pipFreeOrigin = nil  // reset free drag; use preset corner
+        pipFreeOrigin = nil
         pipCorner     = style.corner
 
         let size = view.bounds.size
         let safe = view.safeAreaInsets
+
+        if style.isSplitH {
+            layoutSplitPiP(size: size)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            return
+        }
+
         let shorter = min(size.width, size.height)
         let isLandscape = size.width > size.height
 
-        // Compute pip size for this style
         let rawAspect = videoRecorder.pipFrameAspect ?? (9.0 / 16.0)
         let crop = AppSettings.shared.pipCropRect
         let effectiveAspect = rawAspect * crop.width / crop.height
@@ -976,7 +1013,7 @@ class ViewController: UIViewController {
     // MARK: - PiP Drag
 
     @objc private func handlePiPDrag(_ g: UIPanGestureRecognizer) {
-        guard videoRecorder.state != .recording else { return }
+        guard videoRecorder.state != .recording, !frontLayer.isSplitH else { return }
 
         switch g.state {
         case .began:
