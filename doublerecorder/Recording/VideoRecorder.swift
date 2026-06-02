@@ -374,7 +374,9 @@ class VideoRecorder {
             let clampedX = min(max(normOriginX, 0), max(1.0 - normW, 0))
             let clampedY = min(max(normOriginY, 0), max(1.0 - normH, 0))
 
-            let cornerR: Float = layout.isCircle ? min(normW, normH) / 2 : layout.cornerRadius
+            // 圆形：cornerR = normW/2 使 rS = normW/2 * ar = sS.x/2 = sS.y/2（横竖屏均正圆）
+            // 若用 min(normW,normH)/2，竖屏时 normH<normW 会导致 rS 过小，渲染为圆角矩形
+            let cornerR: Float = layout.isCircle ? normW / 2 : layout.cornerRadius
             comp.updateLayer(at: i, params: PiPCompositor.LayerParams(
                 originX: clampedX, originY: clampedY,
                 sizeW: normW, sizeH: normH,
