@@ -248,7 +248,8 @@ class VideoRecorder {
 
     func updatePiPCropRect(_ rect: PiPNormalizedRect) {
         writeQueue.async { [weak self] in
-            self?.compositor?.updateCropRect(rect)
+            // applyLayerLayout 会读 AppSettings.pipCropRect（已由调用方写入），圆形另有中心裁剪
+            self?.applyLayerLayout()
         }
     }
 
@@ -299,14 +300,14 @@ class VideoRecorder {
             let pw = Float(layout.size.width)
 
             let normOriginX, normOriginY, normW, normH: Float
+            var cropOriginX: Float = 0, cropOriginY: Float = 0
+            var cropSizeW:   Float = 1, cropSizeH:   Float = 1
 
-            if layout.isCircle == false && layout.isSplitH {
+            if layout.isSplitH {
                 // 全宽下半：固定 UV，不依赖屏幕坐标
-                normOriginX = 0; normOriginY = 0.5
-                normW = 1.0;     normH = 0.5
                 comp.updateLayer(at: i, params: PiPCompositor.LayerParams(
-                    originX: normOriginX, originY: normOriginY,
-                    sizeW: normW, sizeH: normH,
+                    originX: 0, originY: 0.5,
+                    sizeW: 1.0, sizeH: 0.5,
                     cropOriginX: 0, cropOriginY: 0, cropSizeW: 1, cropSizeH: 1,
                     cornerRadius: 0, mirrorFront: 1
                 ))
@@ -328,33 +329,46 @@ class VideoRecorder {
                     cropX = 0
                     cropY = (bH * scale - sH) / 2
                 }
-
                 normOriginX = (ox + cropX) / (scale * bW)
                 normOriginY = (oy + cropY) / (scale * bH)
-
                 normW = pw / (scale * bW)
+
+                let fW = rawFW.map { Float($0) } ?? bW
+                let fH = rawFH.map { Float($0) } ?? bH
+
                 if layout.isCircle {
-                    // 圆形：使边界框在输出像素空间中为正方形，避免 SDF 生成胶囊形
+                    // 边界框在输出像素空间为正方形，避免 SDF 生成胶囊形
                     normH = normW * bW / bH
+                    // 前摄中心正方形裁剪，匹配预览的 resizeAspectFill 行为
+                    let fAspect = fW / fH
+                    if fAspect > 1.0 {        // 横屏前摄
+                        cropSizeW   = fH / fW
+                        cropOriginX = (1.0 - cropSizeW) / 2.0
+                    } else if fAspect < 1.0 { // 竖屏前摄
+                        cropSizeH   = fW / fH
+                        cropOriginY = (1.0 - cropSizeH) / 2.0
+                    }
                 } else {
-                    let fW = rawFW.map { Float($0) } ?? bW
-                    let fH = rawFH.map { Float($0) } ?? bH
-                    // 高度按前后摄宽高比及裁剪比推算，保证前摄内容无失真
-                    let cropRect = AppSettings.shared.pipCropRect
-                    let cropW = Float(cropRect.width), cropH = Float(cropRect.height)
-                    normH = normW * bH * fW * cropH / (bW * fH * cropW)
+                    let userCrop = AppSettings.shared.pipCropRect
+                    let ucW = Float(userCrop.width), ucH = Float(userCrop.height)
+                    normH = normW * bH * fW * ucH / (bW * fH * ucW)
+                    cropOriginX = Float(userCrop.x);  cropOriginY = Float(userCrop.y)
+                    cropSizeW   = Float(userCrop.width); cropSizeH = Float(userCrop.height)
                 }
             } else {
-                // 帧尺寸未知时回退：屏幕归一化，以裁剪宽高比修正高度
+                // 帧尺寸未知时回退：屏幕归一化
                 normW = pw / sW
+                normOriginX = ox / sW
+                normOriginY = oy / sH
                 if layout.isCircle {
                     normH = normW
+                    // fW/fH 未知，保持默认全帧（稍后 tryInitializeWriters 会重算）
                 } else {
                     let crop = AppSettings.shared.pipCropRect
                     normH = normW * Float(crop.height) / Float(crop.width)
+                    cropOriginX = Float(crop.x);  cropOriginY = Float(crop.y)
+                    cropSizeW   = Float(crop.width); cropSizeH = Float(crop.height)
                 }
-                normOriginX = ox / sW
-                normOriginY = oy / sH
             }
 
             let clampedX = min(max(normOriginX, 0), max(1.0 - normW, 0))
@@ -364,7 +378,8 @@ class VideoRecorder {
             comp.updateLayer(at: i, params: PiPCompositor.LayerParams(
                 originX: clampedX, originY: clampedY,
                 sizeW: normW, sizeH: normH,
-                cropOriginX: 0, cropOriginY: 0, cropSizeW: 1, cropSizeH: 1,
+                cropOriginX: cropOriginX, cropOriginY: cropOriginY,
+                cropSizeW: cropSizeW, cropSizeH: cropSizeH,
                 cornerRadius: cornerR, mirrorFront: 1
             ))
         }
@@ -416,9 +431,8 @@ class VideoRecorder {
         let pipW = pipCameraIsBack ? back.width   : front.width
         let pipH = pipCameraIsBack ? back.height  : front.height
         compositor?.configure(backWidth: bgW, backHeight: bgH, frontWidth: pipW, frontHeight: pipH)
-        applyLayerLayout()
-        compositor?.updateCropRect(AppSettings.shared.pipCropRect)
         compositor?.updateMirror(AppSettings.shared.recordMirrored)
+        applyLayerLayout()  // 统一设置 position/size/crop/cornerRadius
 
         if let w = compositeWriter {
             compositeVideoInput = makeVideoInput(settings: videoSettings(width: bgW, height: bgH))
