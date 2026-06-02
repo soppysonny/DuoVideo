@@ -970,6 +970,10 @@ class ViewController: UIViewController {
             ? PiPMargins(top: safe.top + 14, bottom: pipBottomMargin, left: safe.left + 60, right: safe.right + 130)
             : PiPMargins(top: safe.top + 8,  bottom: pipBottomMargin, left: 8, right: 8)
 
+        // 圆形：预览用全帧 + resizeAspectFill 实现中心正方形裁剪，与合成器一致
+        // 非圆形：恢复用户设置的 crop rect
+        frontPreviewView.visibleRect = style.isCircle ? .fullFrame : AppSettings.shared.pipCropRect
+
         snapPiP(to: style.corner, size: size, pipSize: CGSize(width: pipW, height: pipH),
                 margins: margins, animated: true)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()

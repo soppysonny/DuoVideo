@@ -254,9 +254,8 @@ class VideoRecorder {
     }
 
     func updateFrontMirror(_ mirrored: Bool) {
-        writeQueue.async { [weak self] in
-            self?.compositor?.updateMirror(mirrored)
-        }
+        // 镜像由 CameraManager.setFrontRecordingMirror 在数据连接上处理，合成器不额外翻转
+        _ = mirrored
     }
 
     /// 用屏幕坐标同步 PiP 位置（向后兼容，单层场景）。
@@ -309,7 +308,7 @@ class VideoRecorder {
                     originX: 0, originY: 0.5,
                     sizeW: 1.0, sizeH: 0.5,
                     cropOriginX: 0, cropOriginY: 0, cropSizeW: 1, cropSizeH: 1,
-                    cornerRadius: 0, mirrorFront: 1
+                    cornerRadius: 0, mirrorFront: 0
                 ))
                 continue
             } else if let bW = rawBW.map({ Float($0) }),
@@ -377,12 +376,13 @@ class VideoRecorder {
             // 圆形：cornerR = normW/2 使 rS = normW/2 * ar = sS.x/2 = sS.y/2（横竖屏均正圆）
             // 若用 min(normW,normH)/2，竖屏时 normH<normW 会导致 rS 过小，渲染为圆角矩形
             let cornerR: Float = layout.isCircle ? normW / 2 : layout.cornerRadius
+            // mirrorFront=0: 数据连接已通过 setFrontRecordingMirror 处理镜像，合成器不再额外翻转
             comp.updateLayer(at: i, params: PiPCompositor.LayerParams(
                 originX: clampedX, originY: clampedY,
                 sizeW: normW, sizeH: normH,
                 cropOriginX: cropOriginX, cropOriginY: cropOriginY,
                 cropSizeW: cropSizeW, cropSizeH: cropSizeH,
-                cornerRadius: cornerR, mirrorFront: 1
+                cornerRadius: cornerR, mirrorFront: 0
             ))
         }
         comp.setActiveLayerCount(min(storedPiPLayouts.count, 4))
@@ -433,8 +433,7 @@ class VideoRecorder {
         let pipW = pipCameraIsBack ? back.width   : front.width
         let pipH = pipCameraIsBack ? back.height  : front.height
         compositor?.configure(backWidth: bgW, backHeight: bgH, frontWidth: pipW, frontHeight: pipH)
-        compositor?.updateMirror(AppSettings.shared.recordMirrored)
-        applyLayerLayout()  // 统一设置 position/size/crop/cornerRadius
+        applyLayerLayout()  // 统一设置 position/size/crop/cornerRadius/mirrorFront(=0)
 
         if let w = compositeWriter {
             compositeVideoInput = makeVideoInput(settings: videoSettings(width: bgW, height: bgH))
