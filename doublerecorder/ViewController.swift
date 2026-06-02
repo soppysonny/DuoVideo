@@ -341,6 +341,14 @@ class ViewController: UIViewController {
         pipContainerView.addGestureRecognizer(pan)
 
         // clipsToBounds must stay true for corner rounding; shadow is achieved via border only
+
+        // Restore saved PiP style state so layoutPiP / applyPiPCropState use the correct values
+        if let saved = PiPStylePreset.all.first(where: { $0.id == currentStyleID }) {
+            pipSizeRatio     = saved.sizeRatio
+            pipIsCircle      = saved.isCircle
+            frontLayer.shape = saved.shape
+            pipCorner        = saved.corner
+        }
         applyPiPCropState()
     }
 
