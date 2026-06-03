@@ -45,7 +45,7 @@ final class PiPStylePanelView: UIView {
         blurView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         addSubview(blurView)
 
-        headerLabel.text = "PiP 风格"
+        headerLabel.text = NSLocalizedString("section.pip_style", comment: "")
         headerLabel.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
         headerLabel.textColor = UIColor.white.withAlphaComponent(0.85)
         blurView.contentView.addSubview(headerLabel)
