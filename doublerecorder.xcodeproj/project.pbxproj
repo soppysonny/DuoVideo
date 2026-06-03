@@ -10,6 +10,7 @@
 		5F3D4FB52FAEB47100785B8F /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 5F3D4FB42FAEB47100785B8F /* FirebaseAnalyticsCore */; };
 		5F3D4FB72FAEB47100785B8F /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 5F3D4FB62FAEB47100785B8F /* FirebaseCrashlytics */; };
 		900C8A2E2E4A408281DFA456 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07E15F7DF6B245CDB715BD4D /* StoreKit.framework */; };
+		AA0102030405060708090003 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = AA0102030405060708090002 /* GoogleMobileAds */; };
 		DCE44C3CDD7E4FFB901DA39C /* MessageUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 659363DDD6F44604B144DA02 /* MessageUI.framework */; };
 /* End PBXBuildFile section */
 
@@ -51,6 +52,7 @@
 				5F3D4FB72FAEB47100785B8F /* FirebaseCrashlytics in Frameworks */,
 				5F3D4FB52FAEB47100785B8F /* FirebaseAnalyticsCore in Frameworks */,
 				DCE44C3CDD7E4FFB901DA39C /* MessageUI.framework in Frameworks */,
+				AA0102030405060708090003 /* GoogleMobileAds in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -143,6 +145,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				5F3D4FB32FAEB47100785B8F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				AA0102030405060708090001 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6BD050652FA883D500AECBF5 /* Products */;
@@ -181,7 +184,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2025050601;
+				CURRENT_PROJECT_VERSION = 2025060201;
 				DEVELOPMENT_TEAM = 7KHS4R8V39;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = doublerecorder/Info.plist;
@@ -215,7 +218,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2025050601;
+				CURRENT_PROJECT_VERSION = 2025060201;
 				DEVELOPMENT_TEAM = 7KHS4R8V39;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = doublerecorder/Info.plist;
@@ -396,6 +399,14 @@
 				minimumVersion = 12.13.0;
 			};
 		};
+		AA0102030405060708090001 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -408,6 +419,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 5F3D4FB32FAEB47100785B8F /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseCrashlytics;
+		};
+		AA0102030405060708090002 /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA0102030405060708090001 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -1,6 +1,7 @@
 import UIKit
 import AVFoundation
 import AVKit
+import GoogleMobileAds
 
 class RecordingsListViewController: UIViewController {
 
@@ -31,6 +32,27 @@ class RecordingsListViewController: UIViewController {
     private let titleLabel = UILabel()
     private let emptyLabel = UILabel()
 
+    // MARK: - Ads
+
+    private let adManager = NativeAdManager()
+    private var nativeAd: NativeAd?
+    private static let adInsertPosition = 3
+
+    private func adRowIndex() -> Int? {
+        guard !records.isEmpty, nativeAd != nil else { return nil }
+        return min(Self.adInsertPosition, records.count)
+    }
+
+    private func videoRecordIndex(for tableRow: Int) -> Int {
+        guard let adRow = adRowIndex() else { return tableRow }
+        return tableRow > adRow ? tableRow - 1 : tableRow
+    }
+
+    private func tableRowIndex(for videoIndex: Int) -> Int {
+        guard let adRow = adRowIndex() else { return videoIndex }
+        return videoIndex >= adRow ? videoIndex + 1 : videoIndex
+    }
+
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
@@ -38,6 +60,12 @@ class RecordingsListViewController: UIViewController {
         view.backgroundColor = UIColor(white: 0.07, alpha: 1)
         setupSheet()
         buildUI()
+        adManager.onAdLoaded = { [weak self] ad in
+            guard let self else { return }
+            self.nativeAd = ad
+            if !self.records.isEmpty { self.tableView.reloadData() }
+        }
+        adManager.load(rootViewController: self)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -83,6 +111,7 @@ class RecordingsListViewController: UIViewController {
         tableView.delegate   = self
         tableView.dataSource = self
         tableView.register(VideoCell.self, forCellReuseIdentifier: "VideoCell")
+        tableView.register(NativeAdCell.self, forCellReuseIdentifier: NativeAdCell.reuseID)
         tableView.contentInset = UIEdgeInsets(top: 4, left: 0, bottom: 24, right: 0)
         tableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(tableView)
@@ -144,7 +173,8 @@ class RecordingsListViewController: UIViewController {
                     guard let self else { return }
                     if let idx = self.records.firstIndex(where: { $0.filename == filename }) {
                         self.records[idx].durationSeconds = secs
-                        self.tableView.reloadRows(at: [IndexPath(row: idx, section: 0)], with: .none)
+                        let tableRow = self.tableRowIndex(for: idx)
+                        self.tableView.reloadRows(at: [IndexPath(row: tableRow, section: 0)], with: .none)
                     }
                 }
             }
@@ -183,21 +213,30 @@ class RecordingsListViewController: UIViewController {
 extension RecordingsListViewController: UITableViewDataSource, UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        records.count
+        records.count + (adRowIndex() != nil ? 1 : 0)
     }
 
     func tableView(_ tableView: UITableView,
                    cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        if let adRow = adRowIndex(), indexPath.row == adRow {
+            let cell = tableView.dequeueReusableCell(withIdentifier: NativeAdCell.reuseID, for: indexPath) as! NativeAdCell
+            cell.configure(with: nativeAd!)
+            return cell
+        }
         let cell = tableView.dequeueReusableCell(withIdentifier: "VideoCell", for: indexPath) as! VideoCell
-        cell.configure(with: records[indexPath.row])
+        cell.configure(with: records[videoRecordIndex(for: indexPath.row)])
         return cell
     }
 
-    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat { 76 }
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        if let adRow = adRowIndex(), indexPath.row == adRow { return NativeAdCell.height }
+        return 76
+    }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        let record = records[indexPath.row]
+        if let adRow = adRowIndex(), indexPath.row == adRow { return }
+        let record = records[videoRecordIndex(for: indexPath.row)]
         if record.isPhoto {
             present(PhotoViewerController(url: record.url), animated: true)
         } else {
@@ -213,12 +252,13 @@ extension RecordingsListViewController: UITableViewDataSource, UITableViewDelega
 
     func tableView(_ tableView: UITableView,
                    trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        if let adRow = adRowIndex(), indexPath.row == adRow { return nil }
+        let videoIdx = videoRecordIndex(for: indexPath.row)
         let del = UIContextualAction(style: .destructive, title: NSLocalizedString("recordings.delete", comment: "")) { [weak self] _, _, done in
             guard let self else { done(false); return }
-            let record = self.records.remove(at: indexPath.row)
+            let record = self.records.remove(at: videoIdx)
             try? FileManager.default.removeItem(at: record.url)
             ThumbnailCache.shared.remove(key: record.filename)
-            tableView.deleteRows(at: [indexPath], with: .automatic)
             self.refresh()
             NotificationCenter.default.post(name: .recordingsChanged, object: nil)
             done(true)
