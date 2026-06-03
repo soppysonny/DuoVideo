@@ -88,6 +88,11 @@
 "pip_crop.custom" = "自定义";
 "pip.front" = "前置";
 "pip.back_wide" = "后广角";
+"pip.style.standard" = "标准";
+"pip.style.large" = "大窗";
+"pip.style.small" = "小窗";
+"pip.style.circle" = "圆形";
+"pip.style.split" = "均分";
 "iap.description" = "一次性解锁，无限次录制";
 "iap.pro_unlocked" = "✓  已解锁高级版";
 "iap.free_remaining" = "免费版  ·  还可录制 %d 次";

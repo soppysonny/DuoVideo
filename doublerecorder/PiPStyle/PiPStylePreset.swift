@@ -20,10 +20,10 @@ struct PiPStylePreset {
     }
 
     static let all: [PiPStylePreset] = [
-        PiPStylePreset(id: "standard", name: "标准", corner: .bottomRight, sizeRatio: 0.30, shape: .roundedRect(cornerRadius: 0.015)),
-        PiPStylePreset(id: "large",    name: "大窗", corner: .bottomRight, sizeRatio: 0.45, shape: .roundedRect(cornerRadius: 0.015)),
-        PiPStylePreset(id: "small",    name: "小窗", corner: .bottomRight, sizeRatio: 0.18, shape: .roundedRect(cornerRadius: 0.015)),
-        PiPStylePreset(id: "circle",   name: "圆形", corner: .bottomRight, sizeRatio: 0.25, shape: .circle),
-        PiPStylePreset(id: "split",    name: "均分", corner: .bottomRight, sizeRatio: 0.50, shape: .splitH),
+        PiPStylePreset(id: "standard", name: NSLocalizedString("pip.style.standard", comment: ""), corner: .bottomRight, sizeRatio: 0.30, shape: .roundedRect(cornerRadius: 0.015)),
+        PiPStylePreset(id: "large",    name: NSLocalizedString("pip.style.large",    comment: ""), corner: .bottomRight, sizeRatio: 0.45, shape: .roundedRect(cornerRadius: 0.015)),
+        PiPStylePreset(id: "small",    name: NSLocalizedString("pip.style.small",    comment: ""), corner: .bottomRight, sizeRatio: 0.18, shape: .roundedRect(cornerRadius: 0.015)),
+        PiPStylePreset(id: "circle",   name: NSLocalizedString("pip.style.circle",   comment: ""), corner: .bottomRight, sizeRatio: 0.25, shape: .circle),
+        PiPStylePreset(id: "split",    name: NSLocalizedString("pip.style.split",    comment: ""), corner: .bottomRight, sizeRatio: 0.50, shape: .splitH),
     ]
 }

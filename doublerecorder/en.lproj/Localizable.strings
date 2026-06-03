@@ -88,6 +88,11 @@
 "pip_crop.custom" = "CUSTOM";
 "pip.front" = "Front";
 "pip.back_wide" = "Rear Wide";
+"pip.style.standard" = "Standard";
+"pip.style.large" = "Large";
+"pip.style.small" = "Small";
+"pip.style.circle" = "Circle";
+"pip.style.split" = "Split";
 "iap.description" = "One-time unlock, unlimited recording";
 "iap.pro_unlocked" = "✓  Pro Unlocked";
 "iap.free_remaining" = "Free  ·  %d recordings left";
