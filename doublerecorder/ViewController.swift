@@ -943,6 +943,11 @@ class ViewController: UIViewController {
         pipFreeOrigin = nil
         // 保持当前角落位置，位置与样式无关
 
+        // 圆形和均分都由合成器执行固定的居中 aspect-fill 裁剪。
+        frontPreviewView.visibleRect = (style.isCircle || style.isSplitH)
+            ? .fullFrame
+            : AppSettings.shared.pipCropRect
+
         let size = view.bounds.size
         let safe = view.safeAreaInsets
 
@@ -979,10 +984,6 @@ class ViewController: UIViewController {
         let margins = isLandscape
             ? PiPMargins(top: safe.top + 14, bottom: pipBottomMargin, left: safe.left + 60, right: safe.right + 130)
             : PiPMargins(top: safe.top + 8,  bottom: pipBottomMargin, left: 8, right: 8)
-
-        // 圆形：预览用全帧 + resizeAspectFill 实现中心正方形裁剪，与合成器一致
-        // 非圆形：恢复用户设置的 crop rect
-        frontPreviewView.visibleRect = style.isCircle ? .fullFrame : AppSettings.shared.pipCropRect
 
         snapPiP(to: pipCorner, size: size, pipSize: CGSize(width: pipW, height: pipH),
                 margins: margins, animated: true)
@@ -1038,8 +1039,14 @@ class ViewController: UIViewController {
             }
         case .changed:
             let t = g.translation(in: view)
-            pipContainerView.center = CGPoint(x: pipContainerView.center.x + t.x,
-                                               y: pipContainerView.center.y + t.y)
+            let halfW = pipContainerView.bounds.width / 2
+            let halfH = pipContainerView.bounds.height / 2
+            let proposed = CGPoint(x: pipContainerView.center.x + t.x,
+                                   y: pipContainerView.center.y + t.y)
+            pipContainerView.center = CGPoint(
+                x: min(max(proposed.x, halfW), max(view.bounds.width - halfW, halfW)),
+                y: min(max(proposed.y, halfH), max(view.bounds.height - halfH, halfH))
+            )
             g.setTranslation(.zero, in: view)
         case .ended, .cancelled:
             pipIsDragging = false
@@ -1058,8 +1065,10 @@ class ViewController: UIViewController {
             case (false, false): pipCorner = .bottomRight
             }
             AppSettings.shared.pipCorner = pipCorner
-            let origin = pipContainerView.frame.origin
             let pipSz  = pipContainerView.bounds.size
+            // frame 在缩放动画期间不可靠；center 不受 transform 影响。
+            let origin = CGPoint(x: pipContainerView.center.x - pipSz.width / 2,
+                                 y: pipContainerView.center.y - pipSz.height / 2)
             pipFreeOrigin = origin
             frontLayer.screenOrigin = origin
             frontLayer.screenSize   = pipSz
@@ -1687,8 +1696,8 @@ class ViewController: UIViewController {
 
     private func applyPiPCropState() {
         let cropRect = AppSettings.shared.pipCropRect
-        // 圆形用全帧 + resizeAspectFill 实现中心正方形裁剪，与合成器保持一致
-        frontPreviewView.visibleRect = pipIsCircle ? .fullFrame : cropRect
+        // 圆形和均分使用固定的居中 aspect-fill 裁剪，与合成器保持一致。
+        frontPreviewView.visibleRect = (pipIsCircle || frontLayer.isSplitH) ? .fullFrame : cropRect
         videoRecorder.updatePiPCropRect(cropRect)
         videoRecorder.updateFrontMirror(isFrontMirror)
     }

@@ -41,7 +41,13 @@ final class PiPCropEditorViewController: UIViewController {
         previewHostView.frame = bounds
         previewLayer.frame = bounds
         overlayView.frame = bounds
-        overlayView.contentFrame = bounds
+        let fullSourceRect = previewLayer.layerRectConverted(
+            fromMetadataOutputRect: CGRect(x: 0, y: 0, width: 1, height: 1)
+        )
+        let visibleSourceRect = fullSourceRect.intersection(bounds)
+        overlayView.contentFrame = visibleSourceRect.isNull || visibleSourceRect.isEmpty
+            ? bounds
+            : visibleSourceRect
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -73,7 +79,7 @@ final class PiPCropEditorViewController: UIViewController {
         imageContainerView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(imageContainerView)
 
-        previewLayer.videoGravity = .resizeAspectFill
+        previewLayer.videoGravity = .resizeAspect
         previewHostView.layer.addSublayer(previewLayer)
         previewHostView.backgroundColor = .black
         imageContainerView.addSubview(previewHostView)

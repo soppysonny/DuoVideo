@@ -123,7 +123,32 @@ final class AppSettings {
     // MARK: - PiP Style
 
     var pipStyleID: String {
-        get { UserDefaults.standard.string(forKey: "pipStyleID") ?? "standard" }
+        get {
+            let defaults = UserDefaults.standard
+            guard let storedID = defaults.string(forKey: "pipStyleID") else {
+                return "standard"
+            }
+
+            let legacyCorners: [String: PiPCorner] = [
+                "top_left": .topLeft,
+                "top_right": .topRight,
+                "bottom_left": .bottomLeft,
+            ]
+            if let legacyCorner = legacyCorners[storedID] {
+                if defaults.object(forKey: "pipCorner") == nil {
+                    defaults.set(legacyCorner.rawValue, forKey: "pipCorner")
+                }
+                defaults.set("standard", forKey: "pipStyleID")
+                return "standard"
+            }
+
+            let validIDs = ["standard", "large", "small", "circle", "split"]
+            guard validIDs.contains(storedID) else {
+                defaults.set("standard", forKey: "pipStyleID")
+                return "standard"
+            }
+            return storedID
+        }
         set { UserDefaults.standard.set(newValue, forKey: "pipStyleID") }
     }
 
